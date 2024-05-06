@@ -22,6 +22,7 @@ from kernel_tuner.backends.opencl import OpenCLFunctions
 from kernel_tuner.backends.compiler import CompilerFunctions
 from kernel_tuner.backends.opencl import OpenCLFunctions
 from kernel_tuner.backends.hip import HipFunctions
+from kernel_tuner.backends.triton import TritonFunctions
 from kernel_tuner.observers.nvml import NVMLObserver
 from kernel_tuner.observers.observer import ContinuousObserver, OutputObserver
 
@@ -314,7 +315,12 @@ class DeviceInterface(object):
             )
         elif lang.upper() == "TRITON":
             print("YOu used TRITON, congrats")
-            raise ValueError("Triton not yet implemented")
+            dev = TritonFunctions(
+                device,
+                compiler_options=comiler_options,
+                iterations=iterations,
+                observers=observers
+            )
         else:
             raise ValueError("Sorry, support for languages other than CUDA, OpenCL, HIP, C, and Fortran is not implemented yet")
 
