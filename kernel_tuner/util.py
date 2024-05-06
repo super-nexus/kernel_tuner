@@ -364,6 +364,8 @@ def detect_language(kernel_string):
         lang = "CUDA"
     elif "__kernel" in kernel_string:
         lang = "OpenCL"
+    elif "@triton.jit" in kernel_string:
+        lang = "Triton"
     else:
         lang = "C"
     return lang

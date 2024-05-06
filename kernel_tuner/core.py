@@ -312,6 +312,9 @@ class DeviceInterface(object):
                 iterations=iterations,
                 observers=observers,
             )
+        elif lang.upper() == "TRITON":
+            print("YOu used TRITON, congrats")
+            raise ValueError("Triton not yet implemented")
         else:
             raise ValueError("Sorry, support for languages other than CUDA, OpenCL, HIP, C, and Fortran is not implemented yet")
         self.dev = dev
