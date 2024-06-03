@@ -314,10 +314,10 @@ class DeviceInterface(object):
                 observers=observers,
             )
         elif lang.upper() == "TRITON":
-            print("YOu used TRITON, congrats")
+            print("You used TRITON, congrats")
             dev = TritonFunctions(
                 device,
-                compiler_options=comiler_options,
+                compiler_options=compiler_options,
                 iterations=iterations,
                 observers=observers
             )

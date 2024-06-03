@@ -1,10 +1,9 @@
 import numpy
-from kernel_tuner import tune_kernel
+import triton.language as tl
+from kernel_tuner import tune_kernel, run_kernel
 from kernel_tuner.file_utils import store_output_file, store_metadata_file
 
 
-kernel_string = """
-@triton.jit
 def add_kernel(x_ptr,  # *Pointer* to first input vector.
                y_ptr,  # *Pointer* to second input vector.
                output_ptr,  # *Pointer* to output vector.
@@ -20,7 +19,7 @@ def add_kernel(x_ptr,  # *Pointer* to first input vector.
     y = tl.load(y_ptr + offsets, mask=mask)
     output = x + y
     tl.store(output_ptr + offsets, output, mask=mask)
-"""
+
 
 size = 10000000
 
@@ -32,6 +31,6 @@ n = numpy.int32(size)
 args = [c, a, b, n]
 
 tune_params = dict()
-tune_params["block_size_x"] = [128+64*i for i in range(15)]
+tune_params["block_size_x"] = [2**i for i in range(10)]
 
-results, env = tune_kernel("add_kernel", kernel_string, size, args, tune_params, lang="triton")
+results, env = run_kernel("add_kernel", add_kernel, size, args, tune_params, lang="triton")
