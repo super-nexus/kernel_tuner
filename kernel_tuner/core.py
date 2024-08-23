@@ -3,6 +3,7 @@
 import logging
 import re
 import time
+import inspect
 from collections import namedtuple
 
 import numpy as np
@@ -77,6 +78,7 @@ class KernelSource(object):
         if not isinstance(kernel_sources, list):
             kernel_sources = [kernel_sources]
         self.kernel_sources = kernel_sources
+        self.is_callable = inspect.isfunction(self.kernel_sources[0])
         self.kernel_name = kernel_name
         self.defines = defines
         if lang is None:
@@ -106,6 +108,9 @@ class KernelSource(object):
         :rtype: string
         """
         logging.debug("get_kernel_string called")
+
+        if self.is_callable:
+            logging.warning("Attempting to obtain kernel string from a callable source")
 
         kernel_source = self.kernel_sources[index]
         return util.get_kernel_string(kernel_source, params)
@@ -144,6 +149,9 @@ class KernelSource(object):
         :type block_size_names: list(string)
 
         """
+        if self.is_callable:
+            return kernel_name, None, {}
+
         temp_files = dict()
 
         for i, f in enumerate(self.kernel_sources):
@@ -254,7 +262,7 @@ class DeviceInterface(object):
         :type device: int
 
         :param lang: Specifies the language used for GPU kernels.
-            Currently supported: "CUDA", "OpenCL", "HIP" or "C"
+            Currently supported: "CUDA", "OpenCL", "HIP", "Triton", or "C"
         :type lang: string
 
         :param compiler_options: The compiler options to use when compiling kernels for this device.
@@ -322,7 +330,7 @@ class DeviceInterface(object):
                 observers=observers
             )
         else:
-            raise ValueError("Sorry, support for languages other than CUDA, OpenCL, HIP, C, and Fortran is not implemented yet")
+            raise ValueError("Sorry, support for languages other than CUDA, OpenCL, HIP, C, Triton, and Fortran is not implemented yet")
         self.dev = dev
 
         # look for NVMLObserver in observers, if present, enable special tunable parameters through nvml

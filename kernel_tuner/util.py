@@ -128,6 +128,11 @@ def check_argument_type(dtype, kernel_argument):
 
 def check_argument_list(kernel_name, kernel_string, args):
     """Raise an exception if a kernel arguments do not match host arguments."""
+
+    # This means that kernel is callable and the types can't be analyzed
+    if kernel_string is None:
+        return
+
     kernel_arguments = list()
     collected_errors = list()
     for iterator in re.finditer(kernel_name + "[ \n\t]*" + r"\(", kernel_string):
@@ -155,7 +160,7 @@ def check_argument_list(kernel_name, kernel_string, args):
                     + str(i)
                     + " of type: "
                     + str(type(arg))
-                    + " should be of type np.ndarray or numpy scalar"
+                    + " should be of type np.ndarray, numpy scalar, or a torch.Tensor"
                 )
 
             correct = True
