@@ -31,6 +31,16 @@ n = numpy.int32(size)
 args = [c, a, b, n]
 
 tune_params = dict()
-tune_params["block_size_x"] = [2**i for i in range(10)]
+# tune_params["block_size_x"] = [2**i for i in range(10)] THIS IS ONLY NEEDED FOR TUNING
+tune_params["block_size_x"] = 256
 
-results, env = run_kernel("add_kernel", add_kernel, size, args, tune_params, lang="triton")
+results = run_kernel(
+    kernel_name="add_kernel",
+    kernel_source=add_kernel,
+    problem_size=size,
+    arguments=args,
+    params=tune_params,
+    lang="triton"
+)
+
+print(results)
