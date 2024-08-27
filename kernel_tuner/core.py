@@ -57,6 +57,9 @@ class KernelInstance(_KernelInstance):
 
     def prepare_temp_files_for_error_msg(self):
         """Prepare temp file with source code, and return list of temp file names"""
+        if self.kernel_source.is_callable():
+            return []
+
         temp_filename = util.get_temp_filename(suffix=self.kernel_source.get_suffix())
         util.write_file(temp_filename, self.kernel_string)
         ret = [temp_filename]
@@ -578,57 +581,48 @@ class DeviceInterface(object):
             # Preprocess the argument list. This is required to deal with `MixedPrecisionArray`s
             gpu_args = _preprocess_gpu_arguments(gpu_args, params)
 
-            try:
-                # compile the kernel
-                start_compilation = time.perf_counter()
-                func = self.compile_kernel(instance, verbose)
-                if not func:
-                    result[to.objective] = util.CompilationFailedConfig()
-                else:
-                    # add shared memory arguments to compiled module
-                    if kernel_options.smem_args is not None:
-                        self.dev.copy_shared_memory_args(
-                            util.get_smem_args(kernel_options.smem_args, params)
-                        )
-                    # add constant memory arguments to compiled module
-                    if kernel_options.cmem_args is not None:
-                        self.dev.copy_constant_memory_args(kernel_options.cmem_args)
-                    # add texture memory arguments to compiled module
-                    if kernel_options.texmem_args is not None:
-                        self.dev.copy_texture_memory_args(kernel_options.texmem_args)
-
-                # stop compilation stopwatch and convert to miliseconds
-                last_compilation_time = 1000 * (time.perf_counter() - start_compilation)
-
-                # test kernel for correctness
-                if func and (to.answer or to.verify or self.output_observers):
-                    start_verification = time.perf_counter()
-                    self.check_kernel_output(
-                        func, gpu_args, instance, to.answer, to.atol, to.verify, verbose
+            # compile the kernel
+            start_compilation = time.perf_counter()
+            func = self.compile_kernel(instance, verbose)
+            if not func:
+                result[to.objective] = util.CompilationFailedConfig()
+            else:
+                # add shared memory arguments to compiled module
+                if kernel_options.smem_args is not None:
+                    self.dev.copy_shared_memory_args(
+                        util.get_smem_args(kernel_options.smem_args, params)
                     )
-                    last_verification_time = 1000 * (
-                        time.perf_counter() - start_verification
-                    )
+                # add constant memory arguments to compiled module
+                if kernel_options.cmem_args is not None:
+                    self.dev.copy_constant_memory_args(kernel_options.cmem_args)
+                # add texture memory arguments to compiled module
+                if kernel_options.texmem_args is not None:
+                    self.dev.copy_texture_memory_args(kernel_options.texmem_args)
 
-                # benchmark
-                if func:
-                    # setting the NVML parameters here avoids this time from leaking into the benchmark time, ends up in framework time instead
-                    if self.use_nvml:
-                        self.set_nvml_parameters(instance)
-                    start_benchmark = time.perf_counter()
-                    result.update(
-                        self.benchmark(func, gpu_args, instance, verbose, to.objective, skip_nvml_setting=False)
-                    )
-                    last_benchmark_time = 1000 * (time.perf_counter() - start_benchmark)
+            # stop compilation stopwatch and convert to miliseconds
+            last_compilation_time = 1000 * (time.perf_counter() - start_compilation)
 
-            except Exception as e:
-                # dump kernel sources to temp file
-                temp_filenames = instance.prepare_temp_files_for_error_msg()
-                print(
-                    "Error while compiling or benchmarking, see source files: "
-                    + " ".join(temp_filenames)
+            # test kernel for correctness
+            if func and (to.answer or to.verify or self.output_observers):
+                start_verification = time.perf_counter()
+                self.check_kernel_output(
+                    func, gpu_args, instance, to.answer, to.atol, to.verify, verbose
                 )
-                raise e
+                last_verification_time = 1000 * (
+                    time.perf_counter() - start_verification
+                )
+
+            # benchmark
+            if func:
+                # setting the NVML parameters here avoids this time from leaking into the benchmark time, ends up in framework time instead
+                if self.use_nvml:
+                    self.set_nvml_parameters(instance)
+                start_benchmark = time.perf_counter()
+                result.update(
+                    self.benchmark(func, gpu_args, instance, verbose, to.objective, skip_nvml_setting=False)
+                )
+                last_benchmark_time = 1000 * (time.perf_counter() - start_benchmark)
+
 
             # clean up any temporary files, if no error occured
             instance.delete_temp_files()

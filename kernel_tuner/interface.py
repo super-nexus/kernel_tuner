@@ -814,7 +814,7 @@ def run_kernel(
 
     # copy data in GPU memory back to the host
     results = []
-    for i, arg in enumerate(arguments):
+    for i, arg in enumerate(gpu_args):
         if numpy.isscalar(arg):
             results.append(arg)
         elif isinstance(arg, torch.Tensor):

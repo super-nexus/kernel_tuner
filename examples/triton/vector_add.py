@@ -1,5 +1,6 @@
 import numpy
 import triton.language as tl
+import torch
 from kernel_tuner import tune_kernel, run_kernel
 from kernel_tuner.file_utils import store_output_file, store_metadata_file
 
@@ -23,24 +24,21 @@ def add_kernel(x_ptr,  # *Pointer* to first input vector.
 
 size = 10000000
 
-a = numpy.random.randn(size).astype(numpy.float32)
-b = numpy.random.randn(size).astype(numpy.float32)
-c = numpy.zeros_like(b)
-n = numpy.int32(size)
+a = torch.randn(size, dtype=torch.float32)
+b = torch.randn(size, dtype=torch.float32)
+c = torch.zeros_like(b)
+n = torch.tensor(size, dtype=torch.int32)
 
-args = [c, a, b, n]
+args = [a, b, c, n]
 
 tune_params = dict()
-# tune_params["block_size_x"] = [2**i for i in range(10)] THIS IS ONLY NEEDED FOR TUNING
-tune_params["block_size_x"] = 256
+tune_params["block_size_x"] = [2**i for i in range(10)]
 
-results = run_kernel(
+results, env = tune_kernel(
     kernel_name="add_kernel",
     kernel_source=add_kernel,
     problem_size=size,
     arguments=args,
-    params=tune_params,
+    tune_params=tune_params,
     lang="triton"
 )
-
-print(results)

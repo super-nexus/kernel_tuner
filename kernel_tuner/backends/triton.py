@@ -2,6 +2,7 @@ import logging
 import numpy as np
 
 from kernel_tuner.backends.backend import GPUBackend
+from kernel_tuner.observers.triton import TritonRuntimeObserver
 
 try:
     import torch
@@ -30,9 +31,22 @@ class TritonFunctions(GPUBackend):
         self.name = torch.cuda.get_device_name(self.device_id)
         self.max_threads = self.device_properties.max_threads_per_multi_processor
 
+        env = dict()
+        env["device_name"] = self.name
+        env["max_threads"] = self.max_threads
+        env["iterations"] = iterations
+        env["compiler_options"] = compiler_options
+        self.env = env
+
         self.stream = torch.cuda.default_stream()
-        self.start_event = torch.cuda.Event(enable_timing=True)
-        self.stop_event = torch.cuda.Event(enable_timing=True)
+        self.start = torch.cuda.Event(enable_timing=True)
+        self.end = torch.cuda.Event(enable_timing=True)
+
+        # setup observers
+        self.observers = observers or []
+        self.observers.append(TritonRuntimeObserver(self))
+        for obs in self.observers:
+            obs.register_device(self)
 
         super().__init__(device=device, iterations=iterations, compiler_options=compiler_options, observers=observers)
 
@@ -41,8 +55,11 @@ class TritonFunctions(GPUBackend):
         torch_args = []
 
         for arg in arguments:
-            if isinstance(arg, torch.Tensor):
+            if isinstance(arg, torch.Tensor) and arg.dim() > 0:
                 torch_args.append(arg.cuda())
+            elif isinstance(arg, torch.Tensor) and arg.dim() == 0:
+                scalar_value = arg.item()
+                torch_args.append(scalar_value)
             elif isinstance(arg, np.ndarray):
                 torch_arg = torch.from_numpy(arg)
                 torch_arg_gpu = torch_arg.cuda()
@@ -65,15 +82,15 @@ class TritonFunctions(GPUBackend):
 
     def start_event(self):
         logging.debug("Start triton event")
-        self.start_event.record()
+        self.start.record()
 
     def stop_event(self):
         logging.debug("Stop triton event")
-        self.stop_event.record()
+        self.end.record()
 
     def kernel_finished(self):
         logging.debug("Checking if kernel has finished")
-        return self.stop_event.query()
+        return self.end.query()
 
     def run_kernel(self, func, gpu_args, threads, grid, stream=None):
         # Run the kernel
