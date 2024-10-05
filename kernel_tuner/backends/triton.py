@@ -76,7 +76,8 @@ class TritonFunctions(GPUBackend):
         logging.debug("Compiling triton kernel")
         if kernel_instance.kernel_source.is_callable:
             func = kernel_instance.kernel_source.kernel_sources[0]
-            return triton.jit(func)
+            compiled_kernel = triton.jit(func)
+            return compiled_kernel
         else:
             raise NotImplmenentedError("Currently Triton only supports passing down a callable function")
 
@@ -97,9 +98,23 @@ class TritonFunctions(GPUBackend):
         if stream is None:
             stream = self.stream
 
+        gpu_kwargs = {}
+
+        if 'BLOCK_SIZE' in func.arg_names:
+            gpu_kwargs['BLOCK_SIZE'] = threads[0]
+
+        if 'BLOCK_SIZE_X' in func.arg_names:
+            gpu_kwargs['BLOCK_SIZE_X'] = threads[0]
+
+        if 'BLOCK_SIZE_Y' in func.arg_names:
+            gpu_kwargs['BLOCK_SIZE_Y'] = threads[1]
+
+        if 'BLOCK_SIZE_Z' in func.arg_names:
+            gpu_kwargs['BLOCK_SIZE_Z'] = threads[2]
+
         with torch.cuda.stream(stream):
             logging.debug("Running triton kernel")
-            func[grid](*gpu_args, BLOCK_SIZE=threads[0])
+            func[grid](*gpu_args, **gpu_kwargs)
 
     def synchronize(self):
         torch.cuda.synchronize()
