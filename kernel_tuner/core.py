@@ -159,7 +159,7 @@ class DeviceInterface(object):
                 iterations=iterations,
                 observers=observers,
             )
-        elif lang.upper() == Language.TRITON:
+        elif lang.upper() == "TRITON":
             dev = TritonFunctions(
                 device,
                 compiler_options=compiler_options,

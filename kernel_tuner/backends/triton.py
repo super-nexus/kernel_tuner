@@ -74,12 +74,12 @@ class TritonFunctions(GPUBackend):
 
     def compile(self, kernel_instance):
         logging.debug("Compiling triton kernel")
-        if kernel_instance.kernel_source.is_callable:
-            func = kernel_instance.kernel_source.kernel_sources[0]
-            compiled_kernel = triton.jit(func)
-            return compiled_kernel
-        else:
-            raise NotImplementedError("Currently Triton only supports passing down a callable function")
+
+        if kernel_instance.kernel_fn is None:
+            raise ValueError("kernel_fn is None, currently Triton only supports callable kernel_source")
+
+        compiled_kernel = triton.jit(kernel_instance.kernel_fn)
+        return compiled_kernel
 
     def start_event(self):
         logging.debug("Start triton event")

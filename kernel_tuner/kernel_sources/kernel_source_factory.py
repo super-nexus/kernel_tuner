@@ -6,7 +6,7 @@ from kernel_tuner.language import Language
 
 
 def get_kernel_source(kernel_name, kernel_source, lang, defines):
-    if inspect.isfunction(kernel_source) and lang.upper() == Language.TRITON:
+    if inspect.isfunction(kernel_source) and lang.upper() == 'TRITON':
         return KernelSourceFn(kernel_name, kernel_source, lang, defines)
     else:
         return KernelSourceStr(kernel_name, kernel_source, lang, defines)

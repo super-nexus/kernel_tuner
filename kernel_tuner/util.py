@@ -473,7 +473,6 @@ def get_kernel_string(kernel_source, params=None):
     # logging.debug('get_kernel_string called with %s', str(kernel_source))
     logging.debug("get_kernel_string called")
 
-    kernel_string = None
     if callable(kernel_source):
         kernel_string = kernel_source(params)
     elif isinstance(kernel_source, str):
