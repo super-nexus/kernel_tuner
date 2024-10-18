@@ -32,6 +32,7 @@ import numpy
 import kernel_tuner.core as core
 import kernel_tuner.util as util
 from kernel_tuner.integration import get_objective_defaults
+from kernel_tuner.kernel_sources.kernel_source_factory import get_kernel_source
 from kernel_tuner.runners.sequential import SequentialRunner
 from kernel_tuner.runners.simulation import SimulationRunner
 from kernel_tuner.searchspace import Searchspace
@@ -582,7 +583,7 @@ def tune_kernel(
     if log:
         logging.basicConfig(filename=kernel_name + datetime.now().strftime("%Y%m%d-%H:%M:%S") + ".log", level=log)
 
-    kernelsource = core.KernelSource(kernel_name, kernel_source, lang, defines)
+    kernelsource = get_kernel_source(kernel_name, kernel_source, lang, defines)
 
     _check_user_input(kernel_name, kernelsource, arguments, block_size_names)
 
@@ -761,7 +762,7 @@ def run_kernel(
     if log:
         logging.basicConfig(filename=kernel_name + datetime.now().strftime("%Y%m%d-%H:%M:%S") + ".log", level=log)
 
-    kernelsource = core.KernelSource(kernel_name, kernel_source, lang, defines)
+    kernelsource = get_kernel_source(kernel_name, kernel_source, lang, defines)
 
     _check_user_input(kernel_name, kernelsource, arguments, block_size_names)
 
