@@ -55,8 +55,9 @@ class KernelInstance(_KernelInstance):
 
     def delete_temp_files(self):
         """Delete any generated temp files"""
-        for v in self.temp_files.values():
-            util.delete_temp_file(v)
+        tmp_files_list = self.temp_files.values() if isinstance(self.temp_files, dict) else self.temp_files
+        for tmp_file in tmp_files_list:
+            util.delete_temp_file(tmp_file)
 
     def prepare_temp_files_for_error_msg(self):
         """Prepare temp file with source code, and return list of temp file names"""

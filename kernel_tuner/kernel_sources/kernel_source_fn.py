@@ -1,9 +1,14 @@
 import inspect
 import ast
 import copy
+import uuid
+
 import astor
+import tempfile
+import importlib.util
 
 from typing import Any
+
 from kernel_tuner.kernel_sources.kernel_source import KernelSource
 from kernel_tuner.kernel_sources.model.prepared_kernel_source_data import PreparedKernelSourceData
 
@@ -19,13 +24,18 @@ class KernelSourceFn(KernelSource):
         self.kernel_fn = self.source_kernel_fn
         self.source = inspect.getsource(kernel_source)
         self.source_tree = ast.parse(self.source)
+        self.triton_import_node = ast.ImportFrom(
+            module='triton',
+            names=[ast.alias(name='language', asname='tl')],
+            level=0
+        )
 
     def prepare_kernel_instance(self, kernel_options, params, grid, threads):
-        new_kernel_fn = self.apply_params_to_source_fn(params)
+        new_kernel_fn, temp_file_path = self.apply_params_to_source_fn(params)
         self.kernel_fn = new_kernel_fn
 
         return PreparedKernelSourceData(
-            temp_files=None,
+            temp_files=[temp_file_path],
             kernel_name=self.kernel_name,
             kernel_fn=new_kernel_fn,
             kernel_str=None
@@ -38,21 +48,22 @@ class KernelSourceFn(KernelSource):
         transformer = ReplaceVars(params)
         source_tree_copy = copy.deepcopy(self.source_tree)
         new_tree = transformer.visit(source_tree_copy)
+        new_tree.body.insert(0, self.triton_import_node)
+
         ast.fix_missing_locations(new_tree)
+        new_source = astor.to_source(new_tree)
 
-        new_code = compile(new_tree, filename="<ast>", mode="exec")
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
+            temp_file.write(new_source)
+            temp_file_path = temp_file.name
 
-        new_namespace = {}
+        module_name = f'temp_kernel_module_{uuid.uuid4().hex}'
+        spec = importlib.util.spec_from_file_location(module_name, temp_file_path)
+        temp_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(temp_module)
+        new_fn = getattr(temp_module, self.kernel_name)
 
-        import triton.language as tl
-
-        exec_globals = globals().copy()
-        exec_globals["tl"] = tl
-
-        exec(new_code, exec_globals, new_namespace)
-        new_fn = new_namespace[self.kernel_name]
-
-        return new_fn
+        return new_fn, temp_file_path
 
 
 class ReplaceVars(ast.NodeTransformer):
