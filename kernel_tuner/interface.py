@@ -810,7 +810,7 @@ def run_kernel(
             instance.delete_temp_files()
 
     # run the kernel
-    if not dev.run_kernel(func, gpu_args, instance):
+    if not dev.run_kernel_check(func, gpu_args, instance):
         raise RuntimeError("runtime error occured, too many resources requested")
 
     # copy data in GPU memory back to the host

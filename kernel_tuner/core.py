@@ -202,18 +202,24 @@ class DeviceInterface(object):
         if not quiet:
             print("Using: " + self.dev.name)
 
-    def benchmark_prologue(self, func, gpu_args, threads, grid, result):
+    def run_kernel_bench(self, func, gpu_args, threads, grid, stream=None, params=None):
+        if isinstance(self.dev, TritonFunctions):
+            self.dev.run_kernel(func, gpu_args, threads, grid, params=params)
+        else:
+            self.dev.run_kernel(func, gpu_args, threads, grid)
+
+    def benchmark_prologue(self, func, gpu_args, threads, grid, params, result):
         """Benchmark prologue one kernel execution per PrologueObserver"""
 
         for obs in self.prologue_observers:
             self.dev.synchronize()
             obs.before_start()
-            self.dev.run_kernel(func, gpu_args, threads, grid)
+            self.run_kernel_bench(func, gpu_args, threads, grid, params=params)
             self.dev.synchronize()
             obs.after_finish()
             result.update(obs.get_results())
 
-    def benchmark_default(self, func, gpu_args, threads, grid, result):
+    def benchmark_default(self, func, gpu_args, threads, grid, params, result):
         """Benchmark one kernel execution for 'iterations' at a time"""
 
         self.dev.synchronize()
@@ -222,7 +228,7 @@ class DeviceInterface(object):
                 obs.before_start()
             self.dev.synchronize()
             self.dev.start_event()
-            self.dev.run_kernel(func, gpu_args, threads, grid)
+            self.run_kernel_bench(func, gpu_args, threads, grid, params=params)
             self.dev.stop_event()
             for obs in self.benchmark_observers:
                 obs.after_start()
@@ -237,7 +243,7 @@ class DeviceInterface(object):
         for obs in self.benchmark_observers:
             result.update(obs.get_results())
 
-    def benchmark_continuous(self, func, gpu_args, threads, grid, result, duration):
+    def benchmark_continuous(self, func, gpu_args, threads, grid, params, result, duration):
         """Benchmark continuously for at least 'duration' seconds"""
         iterations = int(np.ceil(duration / (result["time"] / 1000)))
         self.dev.synchronize()
@@ -245,7 +251,7 @@ class DeviceInterface(object):
             obs.before_start()
         self.dev.start_event()
         for _ in range(iterations):
-            self.dev.run_kernel(func, gpu_args, threads, grid)
+            self.run_kernel_bench(func, gpu_args, threads, grid, params=params)
         self.dev.stop_event()
         for obs in self.continuous_observers:
             obs.after_start()
@@ -289,8 +295,8 @@ class DeviceInterface(object):
 
         result = {}
         try:
-            self.benchmark_prologue(func, gpu_args, instance.threads, instance.grid, result)
-            self.benchmark_default(func, gpu_args, instance.threads, instance.grid, result)
+            self.benchmark_prologue(func, gpu_args, instance.threads, instance.grid, instance.params, result)
+            self.benchmark_default(func, gpu_args, instance.threads, instance.grid, instance.params, result)
 
             if self.continuous_observers:
                 duration = 1
@@ -299,7 +305,7 @@ class DeviceInterface(object):
                     duration = max(duration, obs.continuous_duration)
 
                 self.benchmark_continuous(
-                    func, gpu_args, instance.threads, instance.grid, result, duration
+                    func, gpu_args, instance.threads, instance.grid, instance.params, result, duration
                 )
 
         except Exception as e:
@@ -311,6 +317,7 @@ class DeviceInterface(object):
                 "too many resources requested for launch",
                 "OUT_OF_RESOURCES",
                 "INVALID_WORK_GROUP_SIZE",
+                "out of resource: shared memory",
             ]
             if any([skip_str in str(e) for skip_str in skippable_exceptions]):
                 logging.debug(
@@ -349,7 +356,7 @@ class DeviceInterface(object):
                 self.dev.memcpy_htod(gpu_args[i], arg)
 
         # run the kernel
-        check = self.run_kernel(func, gpu_args, instance)
+        check = self.run_kernel_check(func, gpu_args, instance)
         if not check:
             return  # runtime failure occured that should be ignored, skip correctness check
 
@@ -418,7 +425,7 @@ class DeviceInterface(object):
 
             # compile the kernel
             start_compilation = time.perf_counter()
-            func = self.compile_kernel(instance, verbose)
+            func = self.compile_kernel(instance, verbose, gpu_args)
             if not func:
                 result[to.objective] = util.CompilationFailedConfig()
             else:
@@ -468,14 +475,18 @@ class DeviceInterface(object):
 
         return result
 
-    def compile_kernel(self, instance, verbose):
+    def compile_kernel(self, instance, verbose, gpu_args=None):
         """compile the kernel for this specific instance"""
         logging.debug("compile_kernel " + instance.name)
 
         # compile kernel_string into device func
         func = None
         try:
-            func = self.dev.compile(instance)
+            if isinstance(self.dev, TritonFunctions):
+                # Triton require
+                func = self.dev.compile(instance, gpu_args)
+            else:
+                func = self.dev.compile(instance)
         except Exception as e:
             # compiles may fail because certain kernel configurations use too
             # much shared memory for example, the desired behavior is to simply
@@ -483,6 +494,7 @@ class DeviceInterface(object):
             shared_mem_error_messages = [
                 "uses too much shared data",
                 "local memory limit exceeded",
+                "out of resource: shared memory"
             ]
             if any(msg in str(e) for msg in shared_mem_error_messages):
                 logging.debug(
@@ -535,7 +547,7 @@ class DeviceInterface(object):
             kernel_options.block_size_names,
         )
 
-        if np.prod(threads) > self.dev.max_threads:
+        if kernel_source.lang != 'TRITON' and np.prod(threads) > self.dev.max_threads:
             if verbose:
                 print(
                     f"skipping config {util.get_instance_string(params)} reason: too many threads per block"
@@ -601,14 +613,14 @@ class DeviceInterface(object):
 
         return gpu_args
 
-    def run_kernel(self, func, gpu_args, instance):
+    def run_kernel_check(self, func, gpu_args, instance):
         """Run a compiled kernel instance on a device"""
         logging.debug("run_kernel %s", instance.name)
         logging.debug("thread block dims (%d, %d, %d)", *instance.threads)
         logging.debug("grid dims (%d, %d, %d)", *instance.grid)
 
         try:
-            self.dev.run_kernel(func, gpu_args, instance.threads, instance.grid)
+            self.run_kernel_bench(func, gpu_args, instance.threads, instance.grid, params=instance.params)
         except Exception as e:
             if "too many resources requested for launch" in str(
                 e
