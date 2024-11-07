@@ -48,6 +48,8 @@ class TritonFunctions(GPUBackend):
         for obs in self.observers:
             obs.register_device(self)
 
+        self.units = {"time": "ms", "power": "s,mW", "energy": "J"}
+
         super().__init__(device=device, iterations=iterations, compiler_options=compiler_options, observers=observers)
 
     def ready_argument_list(self, arguments):
@@ -169,5 +171,3 @@ class TritonFunctions(GPUBackend):
 
     def copy_texture_memory_args(self, texmem_args):
         raise NotImplementedError("Triton does not support texture memory")
-
-    units = {"time": "ms", "power": "s,mW", "energy": "J"}

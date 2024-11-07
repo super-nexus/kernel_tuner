@@ -120,7 +120,7 @@ tune_params['num_stages'] = [1, 2, 3, 4, 5]
 tune_params['GROUP_SIZE_M'] = [8]
 
 constraints = [
-    "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 1024"
+    "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 524288"
 ]
 
 # Launch the kernel
@@ -130,6 +130,7 @@ a, b = tune_kernel(
     kernel_source=matmul_kernel,
     problem_size=problem_size,
     arguments=arguments,
+    restrictions=constraints,
     tune_params=tune_params,
     lang='TRITON',
     block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
