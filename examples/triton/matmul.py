@@ -84,13 +84,13 @@ TORCH_HAS_FP8 = hasattr(torch, "float8_e5m2")
 if not TORCH_HAS_FP8 or not torch.cuda.is_available():
     raise RuntimeError("This example requires a GPU with FP8 support.")
 
-problem_size = (512, 512, 1)
+problem_size = (2048, 2048, 1)
 a = torch.randn((512, 512), dtype=torch.float16)
 b = torch.randn((512, 512), dtype=torch.float16)
 a = a.to(torch.float8_e5m2)
 b = b.T
 b = b.to(torch.float8_e5m2)
-c = torch.empty((512, 512), dtype=torch.float16)
+c = torch.empty((2048, 2048), dtype=torch.float16)
 M, K = a.shape
 _, N = b.shape
 M = torch.tensor(M, dtype=torch.int32)
@@ -117,6 +117,7 @@ tune_params['BLOCK_SIZE_X'] = [16 * 2 ** i for i in range(6)]
 tune_params['BLOCK_SIZE_Y'] = [16 * 2 ** i for i in range(6)]
 tune_params['BLOCK_SIZE_Z'] = [16 * 2 ** i for i in range(6)]
 tune_params['num_stages'] = [1, 2, 3, 4, 5]
+tune_params['num_warps'] = [1, 2, 4, 8]
 tune_params['GROUP_SIZE_M'] = [8]
 
 constraints = [

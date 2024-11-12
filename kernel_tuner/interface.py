@@ -791,7 +791,7 @@ def run_kernel(
         util.check_argument_list(instance.name, instance.kernel_string, arguments)
 
         # compile the kernel
-        func = dev.compile_kernel(instance, False)
+        func = dev.compile_kernel(instance, False, gpu_args=gpu_args)
         if func is None:
             raise RuntimeError("cannot compile kernel, too much shared memory used")
 

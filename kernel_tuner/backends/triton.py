@@ -90,7 +90,6 @@ class TritonFunctions(GPUBackend):
         gpu_kwargs = self.build_gpu_kwargs(jit_function, threads, params)
 
         # Set this to True to compile but not run the kernel
-        gpu_kwargs['warmup'] = True
 
         # Call the jit function in order to compile it
         jit_function[grid](*gpu_args, **gpu_kwargs)
