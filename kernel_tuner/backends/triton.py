@@ -140,6 +140,10 @@ class TritonFunctions(GPUBackend):
         if params is None:
             return gpu_kwargs
 
+        for param in params:
+            if param in jit_fn.arg_names:
+                gpu_kwargs[param] = params[param]
+
         # Check for Triton specific parameters
         if 'num_warps' in params:
             gpu_kwargs['num_warps'] = params['num_warps']

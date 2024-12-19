@@ -1,4 +1,5 @@
 import torch
+import gc
 
 from triton import language as tl
 from kernel_tuner.interface import run_kernel, tune_kernel
@@ -84,55 +85,73 @@ TORCH_HAS_FP8 = hasattr(torch, "float8_e5m2")
 if not TORCH_HAS_FP8 or not torch.cuda.is_available():
     raise RuntimeError("This example requires a GPU with FP8 support.")
 
-problem_size = (2048, 2048, 1)
-a = torch.randn((512, 512), dtype=torch.float16)
-b = torch.randn((512, 512), dtype=torch.float16)
-a = a.to(torch.float8_e5m2)
-b = b.T
-b = b.to(torch.float8_e5m2)
-c = torch.empty((2048, 2048), dtype=torch.float16)
-M, K = a.shape
-_, N = b.shape
-M = torch.tensor(M, dtype=torch.int32)
-K = torch.tensor(K, dtype=torch.int32)
-N = torch.tensor(N, dtype=torch.int32)
 
-stride_am = torch.tensor(a.stride(0), dtype=torch.int32)
-stride_ak = torch.tensor(a.stride(1), dtype=torch.int32)
-stride_bk = torch.tensor(b.stride(0), dtype=torch.int32)
-stride_bn = torch.tensor(b.stride(1), dtype=torch.int32)
-stride_cm = torch.tensor(c.stride(0), dtype=torch.int32)
-stride_cn = torch.tensor(c.stride(1), dtype=torch.int32)
+def tune_matmul(m):
+    problem_size = (m, m, 1)
+    matrix_size = (problem_size[0], problem_size[1])
+    a = torch.randn(matrix_size, dtype=torch.float16)
+    b = torch.randn(matrix_size, dtype=torch.float16)
+    a = a.to(torch.float8_e5m2)
+    b = b.T
+    b = b.to(torch.float8_e5m2)
+    c = torch.empty(matrix_size, dtype=torch.float16)
+    M, K = a.shape
+    _, N = b.shape
+    M = torch.tensor(M, dtype=torch.int32)
+    K = torch.tensor(K, dtype=torch.int32)
+    N = torch.tensor(N, dtype=torch.int32)
 
-arguments = [
-    a, b, c,
-    M, N, K,
-    stride_am, stride_ak,
-    stride_bk, stride_bn,
-    stride_cm, stride_cn,
-]
+    stride_am = torch.tensor(a.stride(0), dtype=torch.int32)
+    stride_ak = torch.tensor(a.stride(1), dtype=torch.int32)
+    stride_bk = torch.tensor(b.stride(0), dtype=torch.int32)
+    stride_bn = torch.tensor(b.stride(1), dtype=torch.int32)
+    stride_cm = torch.tensor(c.stride(0), dtype=torch.int32)
+    stride_cn = torch.tensor(c.stride(1), dtype=torch.int32)
 
-tune_params = dict()
-tune_params['BLOCK_SIZE_X'] = [16 * 2 ** i for i in range(6)]
-tune_params['BLOCK_SIZE_Y'] = [16 * 2 ** i for i in range(6)]
-tune_params['BLOCK_SIZE_Z'] = [16 * 2 ** i for i in range(6)]
-tune_params['num_stages'] = [1, 2, 3, 4, 5]
-tune_params['num_warps'] = [1, 2, 4, 8]
-tune_params['GROUP_SIZE_M'] = [8]
+    arguments = [
+        a, b, c,
+        M, N, K,
+        stride_am, stride_ak,
+        stride_bk, stride_bn,
+        stride_cm, stride_cn,
+    ]
 
-constraints = [
-    "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 524288"
-]
+    tune_params = dict()
+    tune_params['BLOCK_SIZE_X'] = [16 * 2 ** i for i in range(6)]
+    tune_params['BLOCK_SIZE_Y'] = [16 * 2 ** i for i in range(6)]
+    tune_params['BLOCK_SIZE_Z'] = [16 * 2 ** i for i in range(6)]
+    tune_params['num_stages'] = [1, 2, 3, 4, 5]
+    tune_params['num_warps'] = [1, 2, 4, 8]
+    tune_params['GROUP_SIZE_M'] = [8]
 
-# Launch the kernel
+    constraints = [
+        "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 524288"
+    ]
 
-a, b = tune_kernel(
-    kernel_name='matmul_kernel',
-    kernel_source=matmul_kernel,
-    problem_size=problem_size,
-    arguments=arguments,
-    restrictions=constraints,
-    tune_params=tune_params,
-    lang='TRITON',
-    block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
-)
+    results, env = tune_kernel(
+        kernel_name='matmul_kernel',
+        kernel_source=matmul_kernel,
+        problem_size=problem_size,
+        arguments=arguments,
+        restrictions=constraints,
+        tune_params=tune_params,
+        lang='TRITON',
+        block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
+    )
+
+    return results
+
+
+if __name__ == '__main__':
+    mat_sizes = [512, 1024, 2048, 4096]
+    results = []
+    for m in mat_sizes:
+        result = tune_matmul(m)
+        gc.collect()
+        torch.cuda.empty_cache()
+        results.append(result)
+
+    # Write results to a file
+    with open('results.txt', 'w') as f:
+        for result in results:
+            f.write(str(result) + '\n')
