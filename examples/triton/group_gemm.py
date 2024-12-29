@@ -1,6 +1,7 @@
 import torch
 import triton.language as tl
 import numpy as np
+import gc
 
 from kernel_tuner.interface import tune_kernel
 
@@ -54,16 +55,27 @@ def grouped_matmul_kernel(
             offs_am = tile_m_idx * BLOCK_SIZE_X + tl.arange(0, BLOCK_SIZE_X)
             offs_bn = tile_n_idx * BLOCK_SIZE_Y + tl.arange(0, BLOCK_SIZE_Y)
             offs_k = tl.arange(0, BLOCK_SIZE_Z)
+            
+            # Add masks for boundary checking
+            mask_m = offs_am < gm
+            mask_n = offs_bn < gn
+            mask_k = offs_k < k
+            
             a_ptrs = a_ptr + offs_am[:, None] * lda + offs_k[None, :]
             b_ptrs = b_ptr + offs_k[:, None] * ldb + offs_bn[None, :]
             accumulator = tl.zeros((BLOCK_SIZE_X, BLOCK_SIZE_Y), dtype=tl.float32)
+            
             for kk in range(0, tl.cdiv(k, BLOCK_SIZE_Z)):
+                k_remaining = k - kk * BLOCK_SIZE_Z
+                k_mask = offs_k < k_remaining
+                
+                # Load with masks
+                a = tl.load(a_ptrs, mask=mask_m[:, None] & k_mask[None, :], other=0.0)
+                b = tl.load(b_ptrs, mask=k_mask[:, None] & mask_n[None, :], other=0.0)
+                
                 # hint to Triton compiler to do proper loop pipelining
                 tl.multiple_of(a_ptrs, [16, 16])
                 tl.multiple_of(b_ptrs, [16, 16])
-                # assume full tile for now
-                a = tl.load(a_ptrs)
-                b = tl.load(b_ptrs)
                 accumulator += tl.dot(a, b)
                 a_ptrs += BLOCK_SIZE_Z
                 b_ptrs += BLOCK_SIZE_Z * ldb
@@ -73,8 +85,8 @@ def grouped_matmul_kernel(
             offs_cn = tile_n_idx * BLOCK_SIZE_Y + tl.arange(0, BLOCK_SIZE_Y)
             c_ptrs = c_ptr + ldc * offs_cm[:, None] + offs_cn[None, :]
 
-            # assumes full tile for now
-            tl.store(c_ptrs, c)
+            # Store with masks
+            tl.store(c_ptrs, c, mask=mask_m[:, None] & mask_n[None, :])
 
             # go to the next tile by advancing NUM_SM
             tile_idx += NUM_SM
@@ -83,72 +95,88 @@ def grouped_matmul_kernel(
         last_problem_end = last_problem_end + num_tiles
 
 
-group_size = np.int32(4)
-N = 512
-group_A = []
-group_B = []
-A_addrs = []
-B_addrs = []
-C_addrs = []
-g_sizes = []
-g_lds = []
-group_C = []
-for i in range(group_size):
-    A = torch.rand((N, N), device="cuda", dtype=torch.float16)
-    B = torch.rand((N, N), device="cuda", dtype=torch.float16)
-    C = torch.empty((N, N), device="cuda", dtype=torch.float16)
-    group_A.append(A)
-    group_B.append(B)
-    group_C.append(C)
-    A_addrs.append(A.data_ptr())
-    B_addrs.append(B.data_ptr())
-    C_addrs.append(C.data_ptr())
-    g_sizes += [N, N, N]
-    g_lds += [N, N, N]
-
-d_a_ptrs = torch.tensor(A_addrs, device="cuda")
-d_b_ptrs = torch.tensor(B_addrs, device="cuda")
-d_c_ptrs = torch.tensor(C_addrs, device="cuda")
-d_g_sizes = torch.tensor(g_sizes, dtype=torch.int32, device="cuda")
-d_g_lds = torch.tensor(g_lds, dtype=torch.int32, device="cuda")
-
-problem_size = (1, 1, 1)
-
+# Constants and parameters that don't change
 tunable_params = {
     "BLOCK_SIZE_X": [2 ** i for i in range(4, 9)],
     "BLOCK_SIZE_Y": [2 ** i for i in range(4, 9)],
     "BLOCK_SIZE_Z": [2 ** i for i in range(4, 9)],
-    "NUM_SM": [82]
+    "NUM_SM": [60, 72, 82, 90, 105]
 }
 
 constraints = [
     "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 524288"
 ]
 
-args = [
-    d_a_ptrs,
-    d_b_ptrs,
-    d_c_ptrs,
-    d_g_sizes,
-    d_g_lds,
-    group_size,
-]
-
 grid_div_x = ["1/NUM_SM"]
 grid_div_y = []
 grid_div_z = []
 
+def tune_group_gemm(N):
+    group_size = np.int32(4)
+    group_A = []
+    group_B = []
+    A_addrs = []
+    B_addrs = []
+    C_addrs = []
+    g_sizes = []
+    g_lds = []
+    group_C = []
+    for i in range(group_size):
+        A = torch.rand((N, N), device="cuda", dtype=torch.float16)
+        B = torch.rand((N, N), device="cuda", dtype=torch.float16)
+        C = torch.empty((N, N), device="cuda", dtype=torch.float16)
+        group_A.append(A)
+        group_B.append(B)
+        group_C.append(C)
+        A_addrs.append(A.data_ptr())
+        B_addrs.append(B.data_ptr())
+        C_addrs.append(C.data_ptr())
+        g_sizes += [N, N, N]
+        g_lds += [N, N, N]
 
-res, env = tune_kernel(
-    kernel_name="grouped_matmul_kernel",
-    kernel_source=grouped_matmul_kernel,
-    problem_size=problem_size,
-    arguments=args,
-    tune_params=tunable_params,
-    grid_div_x=grid_div_x,
-    grid_div_y=grid_div_y,
-    grid_div_z=grid_div_z,
-    restrictions=constraints,
-    lang="TRITON",
-    block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
-)
+    d_a_ptrs = torch.tensor(A_addrs, device="cuda")
+    d_b_ptrs = torch.tensor(B_addrs, device="cuda")
+    d_c_ptrs = torch.tensor(C_addrs, device="cuda")
+    d_g_sizes = torch.tensor(g_sizes, dtype=torch.int32, device="cuda")
+    d_g_lds = torch.tensor(g_lds, dtype=torch.int32, device="cuda")
+
+    problem_size = (1, 1, 1)
+
+    args = [
+        d_a_ptrs,
+        d_b_ptrs,
+        d_c_ptrs,
+        d_g_sizes,
+        d_g_lds,
+        group_size,
+    ]
+
+    res, env = tune_kernel(
+        kernel_name="grouped_matmul_kernel",
+        kernel_source=grouped_matmul_kernel,
+        problem_size=problem_size,
+        arguments=args,
+        tune_params=tunable_params,
+        grid_div_x=grid_div_x,
+        grid_div_y=grid_div_y,
+        grid_div_z=grid_div_z,
+        restrictions=constraints,
+        lang="TRITON",
+        block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
+    )
+    
+    return res
+
+if __name__ == '__main__':
+    matrix_sizes = [128, 256, 512, 1024, 2048]
+    results = []
+    for size in matrix_sizes:
+        result = tune_group_gemm(size)
+        gc.collect()
+        torch.cuda.empty_cache()
+        results.append(result)
+
+    # Write results to a file
+    with open('group_gemm_results.txt', 'w') as f:
+        for result in results:
+            f.write(str(result) + '\n')

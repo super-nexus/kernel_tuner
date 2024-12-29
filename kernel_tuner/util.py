@@ -427,7 +427,7 @@ def get_grid_dimensions(current_problem_size, params, grid_div, block_size_names
             return divisor_list(params)
         else:
             return np.prod(
-                [int(eval(replace_param_occurrences(s, params))) for s in divisor_list]
+                [float(eval(replace_param_occurrences(s, params))) for s in divisor_list]
             )
 
     divisors = [
