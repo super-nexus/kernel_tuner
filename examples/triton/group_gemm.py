@@ -165,18 +165,33 @@ def tune_group_gemm(N):
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
     )
     
-    return res
+    # Filter out failed configurations and format results
+    valid_results = []
+    for config in res:
+        # Check if time is a valid positive float
+        try:
+            time = float(config['time'])
+            if time > 0:
+                config['time'] = time  # Ensure it's stored as float
+                valid_results.append(config)
+        except (ValueError, TypeError):
+            continue
+    
+    return valid_results
 
 if __name__ == '__main__':
     matrix_sizes = [128, 256, 512, 1024, 2048]
-    results = []
+    all_results = {}
+    
     for size in matrix_sizes:
-        result = tune_group_gemm(size)
+        results = tune_group_gemm(size)
         gc.collect()
         torch.cuda.empty_cache()
-        results.append(result)
-
-    # Write results to a file
-    with open('group_gemm_results.txt', 'w') as f:
-        for result in results:
-            f.write(str(result) + '\n')
+        all_results[str(size)] = results
+    
+    # Write results to a JSON file
+    import json
+    output_file = 'group_gemm_results.json'
+    
+    with open(output_file, 'w') as f:
+        json.dump(all_results, f, indent=2)
