@@ -139,19 +139,34 @@ def tune_matmul(m):
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
     )
 
-    return results
+    # Filter out failed configurations and format results
+    valid_results = []
+    for config in results:
+        # Check if time is a valid positive float
+        try:
+            time = float(config['time'])
+            if time > 0:
+                config['time'] = time  # Ensure it's stored as float
+                valid_results.append(config)
+        except (ValueError, TypeError):
+            continue
+    
+    return valid_results
 
 
 if __name__ == '__main__':
     mat_sizes = [512, 1024, 2048, 4096]
-    results = []
+    all_results = {}
+    
     for m in mat_sizes:
         result = tune_matmul(m)
         gc.collect()
         torch.cuda.empty_cache()
-        results.append(result)
+        all_results[str(m)] = result
 
-    # Write results to a file
-    with open('results.txt', 'w') as f:
-        for result in results:
-            f.write(str(result) + '\n')
+    # Write results to a JSON file
+    import json
+    output_file = 'matmul_results.json'
+    
+    with open(output_file, 'w') as f:
+        json.dump(all_results, f, indent=2)
