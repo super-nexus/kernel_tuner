@@ -42,3 +42,5 @@ results, env = tune_kernel(
     tune_params=tune_params,
     lang="triton"
 )
+
+print("Hello")
