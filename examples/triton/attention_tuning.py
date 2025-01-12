@@ -220,12 +220,11 @@ def tune_attention(batch_size=2, seq_len=128, head_dim=64, num_heads=4):
         'HEAD_DIM': [HEAD_DIM_K],
         'HAS_ATTN_MASK': [False],
         'STAGE': [1],
-        'BLOCK_M': [16],
-        'BLOCK_N': [16],
-        'PRE_LOAD_V': [True],
-        'num_stages': [2],
-        'num_warps': [4],
-        'num_ctas': [1],
+        'BLOCK_M': [16, 32, 64, 128, 256, 512, 1024],
+        'BLOCK_N': [16, 32, 64, 128, 256, 512, 1024],
+        'PRE_LOAD_V': [True, False],
+        'num_stages': [1, 2, 3, 4],
+        'num_warps': [1, 2, 4, 8],
     }
 
     # Simple constraint
