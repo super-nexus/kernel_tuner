@@ -255,6 +255,9 @@ def tune_attention(batch_size=2, seq_len=128, head_dim=64, num_heads=4):
         grid_div_z=grid_div_z,
         block_size_names=['BLOCK_M', 'BLOCK_N'],
         strategy='genetic_algorithm'
+        strategy_options={
+            'maxiter=10000'
+        }
     )
 
     return results
