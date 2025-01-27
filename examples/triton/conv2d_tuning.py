@@ -1,5 +1,4 @@
 import torch
-import triton
 import triton.language as tl
 import numpy as np
 from kernel_tuner.interface import tune_kernel
@@ -212,9 +211,9 @@ def tune_conv2d(batch_size=1, in_channels=64, height=32, width=32,
 
     # Define tuning parameters - only powers of 2
     tune_params = {
-        'BLOCK_NI_HO_WO': [2 ** i for i in range(4, 10)],  # [16, 32, 64, 128, 256]
-        'BLOCK_CI': [2 ** i for i in range(4, 10)],         # [16, 32, 64, 128]
-        'BLOCK_CO': [2 ** i for i in range(4, 10)],        # [16, 32, 64, 128, 256]
+        'BLOCK_NI_HO_WO': [2 ** i for i in range(4, 10)],
+        'BLOCK_CI': [2 ** i for i in range(4, 10)],
+        'BLOCK_CO': [2 ** i for i in range(4, 10)],
         'num_stages': [1, 2, 3, 4],
         'num_warps': [1, 2, 4, 8],
     }
