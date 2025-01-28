@@ -10,7 +10,7 @@ if cache_dir is None:
     raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
 
 
-cache_file = os.path.join(cache_dir, 'conv2d_tuning_results.json')
+cache_file = os.path.join(cache_dir, 'conv2d_tuning_results_medium.json')
 
 
 def conv2d_output_size(
@@ -262,12 +262,22 @@ def tune_conv2d(batch_size=1, in_channels=64, height=32, width=32,
 
 
 if __name__ == '__main__':
-    # Run tuning
-    results = tune_conv2d()
+    # Run tuning with moderately large input dimensions
+    results = tune_conv2d(
+        batch_size=16,          # Decreased from 32
+        in_channels=128,        # Decreased from 256
+        height=112,             # Decreased from 224
+        width=112,              # Decreased from 224
+        out_channels=256,       # Decreased from 512
+        kernel_size=3,          # Same
+        stride=1,               # Same
+        padding=1,              # Same
+        groups=1                # Same
+    )
     
     # Save results
     import json
-    with open('conv2d_tuning_results.json', 'w') as f:
+    with open('conv2d_tuning_results_medium.json', 'w') as f:
         json.dump(results, f, indent=2)
     
     # Print best configuration
