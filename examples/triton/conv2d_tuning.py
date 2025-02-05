@@ -280,7 +280,11 @@ if __name__ == '__main__':
     with open('conv2d_tuning_results_medium.json', 'w') as f:
         json.dump(results, f, indent=2)
     
-    # Print best configuration
-    best_config = min(results, key=lambda x: x['time'])
-    print("\nBest configuration:")
-    print(json.dumps(best_config, indent=2))
+    # Filter out failed compilations and find best config
+    valid_results = [result for result in results if isinstance(result['time'], (int, float))]
+    if valid_results:
+        best_config = min(valid_results, key=lambda x: x['time'])
+        print("\nBest configuration:")
+        print(json.dumps(best_config, indent=2))
+    else:
+        print("\nNo valid configurations found - all compilations failed")
