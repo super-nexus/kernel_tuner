@@ -250,11 +250,11 @@ def tune_conv2d(batch_size=1, in_channels=64, height=32, width=32,
         grid_div_y=grid_div_y,
         grid_div_z=grid_div_z,
         block_size_names=['BLOCK_NI_HO_WO', 'BLOCK_CI', 'BLOCK_CO'],
-        strategy='brute_force',
-        # strategy_options={
-        #     'maxiter': 1000,
-        #     'popsize': 100,
-        # },
+        strategy='genetic_algorithm',
+        strategy_options={
+            'maxiter': 1000,
+            'popsize': 100,
+        },
         cache=cache_file,
     )
 
