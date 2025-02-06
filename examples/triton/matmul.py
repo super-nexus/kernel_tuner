@@ -122,7 +122,7 @@ def tune_matmul(m):
     tune_params['BLOCK_SIZE_Z'] = [16 * 2 ** i for i in range(6)]
     tune_params['num_stages'] = [1, 2, 3, 4, 5]
     tune_params['num_warps'] = [1, 2, 4, 8]
-    tune_params['GROUP_SIZE_M'] = [8]
+    tune_params['GROUP_SIZE_M'] = [i for i in range(1, 10)]
 
     constraints = [
         "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 524288"
