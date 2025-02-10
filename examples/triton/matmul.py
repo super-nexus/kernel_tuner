@@ -1,5 +1,6 @@
 import torch
 import gc
+import os
 
 from triton import language as tl
 from kernel_tuner.interface import run_kernel, tune_kernel
@@ -86,6 +87,14 @@ if not TORCH_HAS_FP8 or not torch.cuda.is_available():
     raise RuntimeError("This example requires a GPU with FP8 support.")
 
 
+# Check for required environment variable
+cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
+if cache_dir is None:
+    raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
+
+cache_file = os.path.join(cache_dir, 'matmul_results.json')
+
+
 def tune_matmul(m):
     problem_size = (m, m, 1)
     matrix_size = (problem_size[0], problem_size[1])
@@ -137,6 +146,7 @@ def tune_matmul(m):
         tune_params=tune_params,
         lang='TRITON',
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
+        cache=cache_file,
     )
 
     # Filter out failed configurations and format results
@@ -167,6 +177,6 @@ if __name__ == '__main__':
     # Write results to a JSON file
     import json
     output_file = 'matmul_results.json'
-    
+
     with open(output_file, 'w') as f:
         json.dump(all_results, f, indent=2)
