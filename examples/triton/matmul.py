@@ -1,6 +1,7 @@
 import torch
 import gc
 import os
+import json
 
 from triton import language as tl
 from kernel_tuner.interface import run_kernel, tune_kernel
@@ -168,15 +169,23 @@ if __name__ == '__main__':
     mat_sizes = [512, 1024, 2048, 4096]
     all_results = {}
     
+    # Get GPU information
+    gpu_name = torch.cuda.get_device_name()
+    gpu_info = {
+        "gpu_name": gpu_name,
+    }
+    all_results["gpu_info"] = gpu_info
+
     for m in mat_sizes:
         result = tune_matmul(m)
         gc.collect()
         torch.cuda.empty_cache()
         all_results[str(m)] = result
 
-    # Write results to a JSON file
-    import json
-    output_file = 'matmul_results.json'
+    # Add timestamp to filename
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f'matmul_results_{timestamp}.json'
 
     with open(output_file, 'w') as f:
         json.dump(all_results, f, indent=2)
