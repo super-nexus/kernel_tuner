@@ -2,6 +2,7 @@ import torch
 import triton.language as tl
 import numpy as np
 import gc
+import os
 
 from kernel_tuner.interface import tune_kernel
 
