@@ -4,6 +4,15 @@ import triton
 import triton.language as tl
 from kernel_tuner.interface import tune_kernel
 import numpy as np
+import json
+import os
+
+# Check for required environment variable
+cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
+if cache_dir is None:
+    raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
+
+cache_file = os.path.join(cache_dir, 'attention_tuning_results.json')
 
 @triton.jit
 def _attn_fwd_inner(
@@ -258,6 +267,7 @@ def tune_attention(batch_size=2, seq_len=128, head_dim=64, num_heads=4):
         strategy_options={
             'maxiter': 10000
         },
+        cache=cache_file,
     )
 
     return results
@@ -266,7 +276,11 @@ if __name__ == '__main__':
     # Test with a single configuration first
     results = tune_attention()
     
-    # Save results
-    import json
-    with open('attention_tuning_results.json', 'w') as f:
-        json.dump(results, f, indent=2) 
+    # Filter out failed compilations and find best config
+    valid_results = [result for result in results if isinstance(result['time'], (int, float))]
+    if valid_results:
+        best_config = min(valid_results, key=lambda x: x['time'])
+        print("\nBest configuration:")
+        print(json.dumps(best_config, indent=2))
+    else:
+        print("\nNo valid configurations found - all compilations failed") 

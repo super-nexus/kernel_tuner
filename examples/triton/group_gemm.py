@@ -5,6 +5,12 @@ import gc
 
 from kernel_tuner.interface import tune_kernel
 
+# Check for required environment variable
+cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
+if cache_dir is None:
+    raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
+
+cache_file = os.path.join(cache_dir, 'group_gemm_tuning_results_large.json')
 
 def grouped_matmul_kernel(
     # device tensor of matrices pointers
@@ -100,7 +106,7 @@ tunable_params = {
     "BLOCK_SIZE_X": [2 ** i for i in range(4, 9)],
     "BLOCK_SIZE_Y": [2 ** i for i in range(4, 9)],
     "BLOCK_SIZE_Z": [2 ** i for i in range(4, 9)],
-    "NUM_SM": [60, 72, 82, 90, 105]
+    "NUM_SM": [2 ** i for i in range(6, 10)]
 }
 
 constraints = [
@@ -163,6 +169,7 @@ def tune_group_gemm(N):
         restrictions=constraints,
         lang="TRITON",
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
+        cache=cache_file,
     )
     
     # Filter out failed configurations and format results
@@ -180,7 +187,7 @@ def tune_group_gemm(N):
     return valid_results
 
 if __name__ == '__main__':
-    matrix_sizes = [128, 256, 512, 1024, 2048]
+    matrix_sizes = [4096, 8192, 16384, 32768, 65536]
     all_results = {}
     
     for size in matrix_sizes:
@@ -191,7 +198,7 @@ if __name__ == '__main__':
     
     # Write results to a JSON file
     import json
-    output_file = 'group_gemm_results.json'
+    output_file = 'group_gemm_results_large.json'
     
     with open(output_file, 'w') as f:
         json.dump(all_results, f, indent=2)
