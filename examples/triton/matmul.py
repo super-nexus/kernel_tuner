@@ -90,10 +90,12 @@ if not TORCH_HAS_FP8 or not torch.cuda.is_available():
 
 # Check for required environment variable
 cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
+cache_file_name = os.getenv('KERNEL_TUNER_CACHE_FILE', 'matmul_results.json')
+
 if cache_dir is None:
     raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
 
-cache_file = os.path.join(cache_dir, 'matmul_results.json')
+cache_file = os.path.join(cache_dir, cache_file_name)
 
 
 def tune_matmul(m):
