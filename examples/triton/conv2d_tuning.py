@@ -3,14 +3,17 @@ import triton.language as tl
 import numpy as np
 from kernel_tuner.interface import tune_kernel
 import os
+import json
+from datetime import datetime
 
 # Check for required environment variable
 cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
+cache_file_name = os.getenv('KERNEL_TUNER_CACHE_FILE', 'conv2d_tuning_results.json')
+
 if cache_dir is None:
     raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
 
-
-cache_file = os.path.join(cache_dir, 'conv2d_tuning_results_medium.json')
+cache_file = os.path.join(cache_dir, cache_file_name)
 
 
 def conv2d_output_size(
@@ -264,22 +267,18 @@ def tune_conv2d(batch_size=1, in_channels=64, height=32, width=32,
 if __name__ == '__main__':
     # Run tuning with moderately large input dimensions
     results = tune_conv2d(
-        batch_size=16,          # Decreased from 32
-        in_channels=128,        # Decreased from 256
-        height=112,             # Decreased from 224
-        width=112,              # Decreased from 224
-        out_channels=256,       # Decreased from 512
-        kernel_size=3,          # Same
-        stride=1,               # Same
-        padding=1,              # Same
-        groups=1                # Same
+        batch_size=16,
+        in_channels=128,
+        height=112,
+        width=112,
+        out_channels=256,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        groups=1
     )
     
-    # Save results
-    import json
-    with open('conv2d_tuning_results_medium.json', 'w') as f:
-        json.dump(results, f, indent=2)
-    
+        
     # Filter out failed compilations and find best config
     valid_results = [result for result in results if isinstance(result['time'], (int, float))]
     if valid_results:
@@ -288,3 +287,20 @@ if __name__ == '__main__':
         print(json.dumps(best_config, indent=2))
     else:
         print("\nNo valid configurations found - all compilations failed")
+
+    # Create results dictionary with GPU info
+    all_results = {
+        "gpu_info": {
+            "gpu_name": torch.cuda.get_device_name()
+        },
+        "results": valid_results
+    }
+    
+    # Add timestamp to filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f'conv2d_results_{timestamp}.json'
+    
+    # Save results
+    import json
+    with open(output_file, 'w') as f:
+        json.dump(all_results, f, indent=2)

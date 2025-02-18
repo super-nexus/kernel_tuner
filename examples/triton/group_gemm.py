@@ -3,15 +3,19 @@ import triton.language as tl
 import numpy as np
 import gc
 import os
+import json
+from datetime import datetime
 
 from kernel_tuner.interface import tune_kernel
 
 # Check for required environment variable
 cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
+cache_file_name = os.getenv('KERNEL_TUNER_CACHE_FILE', 'group_gemm_results.json')
+
 if cache_dir is None:
     raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
 
-cache_file = os.path.join(cache_dir, 'group_gemm_tuning_results_large.json')
+cache_file = os.path.join(cache_dir, cache_file_name)
 
 def grouped_matmul_kernel(
     # device tensor of matrices pointers
@@ -189,7 +193,11 @@ def tune_group_gemm(N):
 
 if __name__ == '__main__':
     matrix_sizes = [4096, 8192, 16384, 32768, 65536]
-    all_results = {}
+    all_results = {
+        "gpu_info": {
+            "gpu_name": torch.cuda.get_device_name()
+        }
+    }
     
     for size in matrix_sizes:
         results = tune_group_gemm(size)
@@ -197,9 +205,9 @@ if __name__ == '__main__':
         torch.cuda.empty_cache()
         all_results[str(size)] = results
     
-    # Write results to a JSON file
-    import json
-    output_file = 'group_gemm_results_large.json'
+    # Add timestamp to filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f'group_gemm_results_{timestamp}.json'
     
     with open(output_file, 'w') as f:
         json.dump(all_results, f, indent=2)

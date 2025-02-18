@@ -9,10 +9,12 @@ import os
 
 # Check for required environment variable
 cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
+cache_file_name = os.getenv('KERNEL_TUNER_CACHE_FILE', 'attention_tuning_results.json')
+
 if cache_dir is None:
     raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
 
-cache_file = os.path.join(cache_dir, 'attention_tuning_results.json')
+cache_file = os.path.join(cache_dir, cache_file_name)
 
 @triton.jit
 def _attn_fwd_inner(
@@ -275,7 +277,7 @@ def tune_attention(batch_size=2, seq_len=128, head_dim=64, num_heads=4):
 if __name__ == '__main__':
     # Test with a single configuration first
     results = tune_attention()
-    
+
     # Filter out failed compilations and find best config
     valid_results = [result for result in results if isinstance(result['time'], (int, float))]
     if valid_results:
@@ -283,4 +285,22 @@ if __name__ == '__main__':
         print("\nBest configuration:")
         print(json.dumps(best_config, indent=2))
     else:
-        print("\nNo valid configurations found - all compilations failed") 
+        print("\nNo valid configurations found - all compilations failed")
+    # Create results dictionary with GPU info
+    all_results = {
+        "gpu_info": {
+            "gpu_name": torch.cuda.get_device_name()
+        }
+    }
+    
+    # Add results
+    all_results["results"] = valid_results
+    
+    # Add timestamp to filename
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f'attention_results_{timestamp}.json'
+
+    # Save results
+    with open(output_file, 'w') as f:
+        json.dump(all_results, f, indent=2) 
