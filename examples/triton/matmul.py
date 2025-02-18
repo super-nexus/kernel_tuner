@@ -140,6 +140,8 @@ def tune_matmul(m):
         "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 524288"
     ]
 
+    cache_file_name = f'{cache_file}_{m}.json'
+
     results, env = tune_kernel(
         kernel_name='matmul_kernel',
         kernel_source=matmul_kernel,
@@ -149,7 +151,7 @@ def tune_matmul(m):
         tune_params=tune_params,
         lang='TRITON',
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
-        cache=cache_file,
+        cache=cache_file_name,
     )
 
     # Filter out failed configurations and format results

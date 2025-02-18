@@ -162,6 +162,8 @@ def tune_group_gemm(N):
         group_size,
     ]
 
+    cache_file_name = f'{cache_file}_{N}.json'
+
     res, env = tune_kernel(
         kernel_name="grouped_matmul_kernel",
         kernel_source=grouped_matmul_kernel,
@@ -174,7 +176,7 @@ def tune_group_gemm(N):
         restrictions=constraints,
         lang="TRITON",
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
-        cache=cache_file,
+        cache=cache_file_name,
     )
     
     # Filter out failed configurations and format results
