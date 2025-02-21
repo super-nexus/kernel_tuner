@@ -177,6 +177,10 @@ def tune_group_gemm(N):
         lang="TRITON",
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
         cache=cache_file_name,
+        strategy="genetic_algorithm",
+        strategy_options={
+            'maxiter': 10000
+        },
     )
     
     # Filter out failed configurations and format results
