@@ -194,7 +194,7 @@ def tune_group_gemm(N):
     return valid_results
 
 if __name__ == '__main__':
-    matrix_sizes = [4096, 8192, 16384, 32768, 65536]
+    matrix_sizes = [4096, 8192, 16384]
     all_results = {
         "gpu_info": {
             "gpu_name": torch.cuda.get_device_name()
