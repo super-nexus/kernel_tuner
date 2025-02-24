@@ -187,7 +187,7 @@ def attention_kernel(
     acc = acc / l_i[:, None]
     tl.store(O_block_ptr, acc.to(Out.type.element_ty), mask=q_load_mask[:, None])
 
-def tune_attention(batch_size=2, seq_len=128, head_dim=64, num_heads=4):
+def tune_attention(batch_size=8, seq_len=512, head_dim=128, num_heads=16):
     # Create sample inputs (torch.Tensor)
     query = torch.randn(batch_size, num_heads, seq_len, head_dim, device='cuda')
     key = torch.randn(batch_size, num_heads, seq_len, head_dim, device='cuda')
@@ -231,11 +231,11 @@ def tune_attention(batch_size=2, seq_len=128, head_dim=64, num_heads=4):
         'HEAD_DIM': [HEAD_DIM_K],
         'HAS_ATTN_MASK': [False],
         'STAGE': [1],
-        'BLOCK_M': [16, 32, 64, 128, 256, 512, 1024],
-        'BLOCK_N': [16, 32, 64, 128, 256, 512, 1024],
+        'BLOCK_M': [32, 64, 128, 256, 512, 1024],
+        'BLOCK_N': [32, 64, 128, 256, 512, 1024],
         'PRE_LOAD_V': [True, False],
         'num_stages': [1, 2, 3, 4],
-        'num_warps': [1, 2, 4, 8],
+        'num_warps': [2, 4, 8, 16],
     }
 
     # Simple constraint
