@@ -248,7 +248,7 @@ if __name__ == '__main__':
         "random_sample"
     ]
     
-    matrix_sizes = [4096]
+    matrix_sizes = [8192]
     results_data = []
     force = False
     update_baseline_only = True  # New flag to control baseline-only updates
