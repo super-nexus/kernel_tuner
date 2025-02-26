@@ -152,11 +152,8 @@ def tune_matmul(m):
         lang='TRITON',
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
         cache=cache_file_name,
-        strategy='genetic_algorithm',
-        strategy_options={
-            'maxiter': 10000
-        },
-    )
+        strategy='basinhopping',
+   )
 
     # Filter out failed configurations and format results
     valid_results = []
@@ -174,7 +171,7 @@ def tune_matmul(m):
 
 
 if __name__ == '__main__':
-    mat_sizes = [4096, 8192, 16384, 32768, 65536]
+    mat_sizes = [32768, 65536]
     all_results = {}
     
     # Get GPU information
