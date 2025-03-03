@@ -187,7 +187,7 @@ def attention_kernel(
     acc = acc / l_i[:, None]
     tl.store(O_block_ptr, acc.to(Out.type.element_ty), mask=q_load_mask[:, None])
 
-def tune_attention(batch_size=8, seq_len=512, head_dim=128, num_heads=16):
+def tune_attention(batch_size=20, seq_len=1024, head_dim=64, num_heads=32):
     # Create sample inputs (torch.Tensor)
     query = torch.randn(batch_size, num_heads, seq_len, head_dim, device='cuda')
     key = torch.randn(batch_size, num_heads, seq_len, head_dim, device='cuda')
