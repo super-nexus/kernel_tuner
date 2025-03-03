@@ -9,7 +9,7 @@ import os
 
 # Check for required environment variable
 cache_dir = os.getenv('KERNEL_TUNER_CACHE_DIR')
-cache_file_name = os.getenv('KERNEL_TUNER_CACHE_FILE', 'attention_tuning_results.json')
+cache_file_name = os.getenv('KERNEL_TUNER_CACHE_FILE', 'attention_tuning_results_large.json')
 
 if cache_dir is None:
     raise ValueError("Environment variable KERNEL_TUNER_CACHE_DIR must be set")
