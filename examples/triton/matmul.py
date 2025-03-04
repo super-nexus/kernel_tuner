@@ -136,10 +136,6 @@ def tune_matmul(m):
     tune_params['num_warps'] = [1, 2, 4, 8]
     tune_params['GROUP_SIZE_M'] = [i for i in range(4, 10)]
 
-    constraints = [
-        "BLOCK_SIZE_X * BLOCK_SIZE_Y * BLOCK_SIZE_Z <= 524288"
-    ]
-
     cache_file_name = f'{cache_file}_{m}.json'
 
     results, env = tune_kernel(
@@ -147,7 +143,6 @@ def tune_matmul(m):
         kernel_source=matmul_kernel,
         problem_size=problem_size,
         arguments=arguments,
-        restrictions=constraints,
         tune_params=tune_params,
         lang='TRITON',
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
