@@ -103,9 +103,7 @@ def tune_matmul(m):
     matrix_size = (problem_size[0], problem_size[1])
     a = torch.randn(matrix_size, dtype=torch.float16)
     b = torch.randn(matrix_size, dtype=torch.float16)
-    a = a.to(torch.float8_e5m2)
     b = b.T
-    b = b.to(torch.float8_e5m2)
     c = torch.empty(matrix_size, dtype=torch.float16)
     M, K = a.shape
     _, N = b.shape
@@ -166,7 +164,7 @@ def tune_matmul(m):
 
 
 if __name__ == '__main__':
-    mat_sizes = [32768, 65536]
+    mat_sizes = [4096, 8192, 16384, 32768]
     all_results = {}
     
     # Get GPU information
