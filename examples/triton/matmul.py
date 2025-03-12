@@ -103,7 +103,6 @@ def tune_matmul(m):
     matrix_size = (problem_size[0], problem_size[1])
     a = torch.randn(matrix_size, dtype=torch.float16)
     b = torch.randn(matrix_size, dtype=torch.float16)
-    b = b.T
     c = torch.empty(matrix_size, dtype=torch.float16)
     M, K = a.shape
     _, N = b.shape
