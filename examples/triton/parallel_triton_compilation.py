@@ -107,23 +107,15 @@ def main(m):
         stride_cm, stride_cn,
     ]
     # Define the parameter space
-    tune_params = {
-        "BLOCK_SIZE_M": [16, 32, 64, 128],
-        "BLOCK_SIZE_N": [16, 32, 64, 128],
-        "BLOCK_SIZE_K": [16, 32, 64],
-        "GROUP_SIZE_M": [4, 8, 16],
-        "num_stages": [1, 2, 3, 4],
-        "num_warps": [1, 2, 4, 8],
-    }
-    
-    single_config = {
-        "BLOCK_SIZE_M": [16],
-        "BLOCK_SIZE_N": [16],
-        "BLOCK_SIZE_K": [16],
-        "GROUP_SIZE_M": [4],
-    }
-
     start_time = time.time()
+
+    tune_params = dict()
+    tune_params['BLOCK_SIZE_X'] = [16 * 2 ** i for i in range(6)]
+    tune_params['BLOCK_SIZE_Y'] = [16 * 2 ** i for i in range(6)]
+    tune_params['BLOCK_SIZE_Z'] = [16 * 2 ** i for i in range(6)]
+    tune_params['num_stages'] = [1, 2, 3, 4, 5]
+    tune_params['num_warps'] = [2, 4, 8]
+    tune_params['GROUP_SIZE_M'] = [i for i in range(4, 10)]
 
     results = parallel_compile_triton_kernel(
         kernel_name="matmul_kernel",
@@ -205,4 +197,4 @@ def tune_matmul(m):
     return valid_results
 
 if __name__ == "__main__":
-    tune_matmul(4096)
+    main(4096)
