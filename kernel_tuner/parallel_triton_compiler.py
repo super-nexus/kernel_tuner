@@ -9,6 +9,7 @@ import os
 import time
 import logging
 import concurrent.futures
+import multiprocessing as mp
 import json
 from pathlib import Path
 from typing import Dict, List, Callable, Any, Tuple, Optional, Union
@@ -21,7 +22,7 @@ from triton.backends.compiler import GPUTarget
 from kernel_tuner.interface import Options
 from kernel_tuner.searchspace import Searchspace
 from kernel_tuner.kernel_sources.kernel_source_factory import get_kernel_source
-
+from kernel_tuner.backends.triton import TritonFunctions
 
 class ParallelTritonCompiler:
     """
@@ -40,10 +41,9 @@ class ParallelTritonCompiler:
         self, 
         kernel_fn: Callable, 
         kernel_name: str,
-        signature: Dict[int, str], 
+        arguments: List[any],
         max_workers: int = None,
         cache_dir: str = None,
-        target: GPUTarget = None,
         verbose: bool = True
     ):
         """
@@ -51,15 +51,14 @@ class ParallelTritonCompiler:
         
         Args:
             kernel_fn: The Triton kernel function to compile
-            signature: The signature of the kernel function (mapping from argument index to type)
+            arguments: The arguments of the kernel function
             max_workers: Maximum number of worker processes to use (defaults to os.cpu_count())
             cache_dir: Directory to cache compiled kernels
-            target: The GPU target to compile for (defaults to current device)
             verbose: Whether to print verbose output
         """
         self.kernel_fn = kernel_fn
         self.kernel_name = kernel_name
-        self.signature = signature
+        self.arguments = arguments
         self.max_workers = max_workers or os.cpu_count()
         self.verbose = verbose
 
@@ -69,31 +68,6 @@ class ParallelTritonCompiler:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
         else:
             self.cache_dir = None
-            
-        # Set up target
-        if target is None:
-            # Detect if we're on CUDA or HIP
-            if hasattr(triton.runtime.driver.active, 'get_current_target'):
-                current_target = triton.runtime.driver.active.get_current_target()
-                backend = current_target.backend
-                if backend == "cuda":
-                    # For NVIDIA GPUs
-                    compute_capability = torch.cuda.get_device_capability(torch.cuda.current_device())
-                    sm = compute_capability[0] * 10 + compute_capability[1]
-                    self.target = GPUTarget("cuda", sm, 32)  # 32 threads per warp for NVIDIA
-                elif backend == "hip":
-                    # For AMD GPUs
-                    # This is a simplification - in practice you'd need to map the device to the right gfx target
-                    self.target = GPUTarget("hip", 'gfx90a', 64)  # 64 threads per warp for AMD MI200
-                else:
-                    raise ValueError(f"Unsupported backend: {backend}")
-            else:
-                # Fallback to CUDA
-                compute_capability = torch.cuda.get_device_capability(torch.cuda.current_device())
-                sm = compute_capability[0] * 10 + compute_capability[1]
-                self.target = GPUTarget("cuda", sm, 32)
-        else:
-            self.target = target
             
         self.compilation_results = {}
         
@@ -152,20 +126,13 @@ class ParallelTritonCompiler:
                 print(f"Warning: Tuple config received but can't be compiled directly. Skipping {config}")
                 return config, False
             
+            # Compile using warmup
             kernel_jit = triton.jit(updated_fn)
 
-            # Create ASTSource from the kernel function
-            src = triton.compiler.ASTSource(
-                fn=kernel_jit,
-                signature=self.signature,
-                constants=constants
-            )
-            
-            # Compile the kernel
             start_time = time.time()
-            triton.compile(src, target=self.target)
+            kernel_jit.warmup(grid=(1, 1, 1), *self.arguments, **constants)
             compile_time = time.time() - start_time
-            
+
             # Cache the result if caching is enabled
             if cache_path:
                 with open(cache_path, 'w') as f:
@@ -218,8 +185,9 @@ class ParallelTritonCompiler:
         first_config_hash = self._config_to_hash(first_config)
         print(f"First config to compile: {first_config} (hash: {first_config_hash})")
 
-        # Use ProcessPoolExecutor for parallel compilation
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+        # Use ProcessPoolExecutor with spawn context for parallel compilation
+        mp_context = mp.get_context('spawn')
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers, mp_context=mp_context) as executor:
             # Submit all compilation tasks
             future_to_config = {}
             for config in configs:
@@ -284,11 +252,10 @@ def parallel_compile_triton_kernel(
     kernel_name: str,
     kernel_fn: Callable,
     tune_params: Dict[str, List],
-    signature: Dict[int, str],
+    arguments: List[any],
     restrictions: Optional[Union[Callable, List[str]]] = None,
     max_workers: int = None,
     cache_dir: str = None,
-    target: GPUTarget = None,
     verbose: bool = False
 ) -> Dict[str, bool]:
     """
@@ -301,12 +268,9 @@ def parallel_compile_triton_kernel(
     Args:
         kernel_fn: The Triton kernel function to compile
         tune_params: Dictionary of parameter names to lists of possible values
-        signature: The signature of the kernel function (mapping from argument index to type)
-                  Example: {0: "*fp32", 1: "*fp32", 2: "*fp32", 3: "i32"}
         restrictions: Optional restrictions on the search space
         max_workers: Maximum number of worker processes to use (defaults to os.cpu_count())
         cache_dir: Directory to cache compiled kernels
-        target: The GPU target to compile for (defaults to current device)
         verbose: Whether to print verbose output
         
     Returns:
@@ -333,10 +297,9 @@ def parallel_compile_triton_kernel(
     compiler = ParallelTritonCompiler(
         kernel_name=kernel_name,
         kernel_fn=kernel_fn,
-        signature=signature,
+        arguments=arguments,
         max_workers=max_workers,
         cache_dir=cache_dir,
-        target=target,
         verbose=verbose
     )
     
