@@ -109,9 +109,9 @@ class ParallelTritonCompiler:
         cache_path = self._get_cache_path(config_hash)
 
         # Check if already in cache
-        # if cache_path and cache_path.exists():
-        #     print(f"Config {config_hash} found in cache")
-        #     return config, True
+        if cache_path and cache_path.exists():
+            print(f"Config {config_hash} found in cache")
+            return config, True
         
         try:
             # Convert tuple to dict if needed for compilation

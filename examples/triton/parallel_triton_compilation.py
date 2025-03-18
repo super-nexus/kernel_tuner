@@ -160,14 +160,13 @@ def tune_matmul(m):
         stride_cm, stride_cn,
     ]
 
-    tune_params = {
-        "BLOCK_SIZE_M": [16, 32, 64, 128],
-        "BLOCK_SIZE_N": [16, 32, 64, 128],
-        "BLOCK_SIZE_K": [16, 32, 64],
-        "GROUP_SIZE_M": [4, 8, 16],
-        "num_stages": [1, 2, 3, 4],
-        "num_warps": [1, 2, 4, 8],
-    }
+    tune_params = dict()
+    tune_params['BLOCK_SIZE_M'] = [16 * 2 ** i for i in range(6)]
+    tune_params['BLOCK_SIZE_N'] = [16 * 2 ** i for i in range(6)]
+    tune_params['BLOCK_SIZE_K'] = [16 * 2 ** i for i in range(6)]
+    tune_params['num_stages'] = [1, 2, 3, 4, 5]
+    tune_params['num_warps'] = [2, 4, 8]
+    tune_params['GROUP_SIZE_M'] = [i for i in range(4, 10)]
 
     results, env = tune_kernel(
         kernel_name='matmul_kernel',
