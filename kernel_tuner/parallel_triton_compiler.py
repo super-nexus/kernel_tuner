@@ -166,6 +166,38 @@ class ParallelTritonCompiler:
             
             return config, False
     
+    def _compile_single_config_wrapper(self, config: Union[Dict[str, Any], Tuple]) -> Tuple[Union[Dict[str, Any], Tuple], bool]:
+        """
+        Wrapper function to catch any unexpected exceptions during compilation.
+        
+        Args:
+            config: The kernel configuration to compile
+            
+        Returns:
+            Tuple of (config, success)
+        """
+        try:
+            return self._compile_single_config(config)
+        except Exception as e:
+            config_hash = self._config_to_hash(config)
+            cache_path = self._get_cache_path(config_hash)
+            
+            # Log and cache the failure
+            print(f"Caught unexpected exception while compiling {config_hash}: {type(e).__name__}: {str(e)}")
+            
+            if cache_path:
+                try:
+                    with open(cache_path, 'w') as f:
+                        json.dump({
+                            'config': str(config) if isinstance(config, tuple) else config,
+                            'error': f"{type(e).__name__}: {str(e)}",
+                            'success': False
+                        }, f)
+                except:
+                    print(f"Failed to write to cache file for {config_hash}")
+            
+            return config, False
+    
     def compile_configs(self, configs: List[Union[Dict[str, Any], Tuple]]) -> Dict[str, bool]:
         """
         Compile multiple kernel configurations in parallel.
@@ -185,32 +217,40 @@ class ParallelTritonCompiler:
         first_config_hash = self._config_to_hash(first_config)
         print(f"First config to compile: {first_config} (hash: {first_config_hash})")
 
-        # Use ProcessPoolExecutor with spawn context for parallel compilation
-        mp_context = mp.get_context('spawn')
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers, mp_context=mp_context) as executor:
-            # Submit all compilation tasks
-            future_to_config = {}
-            for config in configs:
-                future = executor.submit(self._compile_single_config, config)
-                future_to_config[future] = config
-            
-            # Process results as they complete
-            completed = 0
-            for future in concurrent.futures.as_completed(future_to_config):
-                config = future_to_config[future]
-                config_hash = self._config_to_hash(config)
-                completed += 1
+        # Process configurations in smaller batches to recover from worker failures
+        batch_size = 32  # Adjust based on your needs
+        for i in range(0, len(configs), batch_size):
+            batch = configs[i:i+batch_size]
+            print(f"Processing batch {i//batch_size + 1}/{(len(configs) + batch_size - 1)//batch_size}")
+
+            # Create a fresh process pool for each batch
+            mp_context = mp.get_context('spawn')
+            with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers, mp_context=mp_context) as executor:
+                # Submit all compilation tasks
+                future_to_config = {}
+                for config in batch:
+                    future = executor.submit(self._compile_single_config_wrapper, config)
+                    future_to_config[future] = config
                 
-                # Print progress
-                if self.verbose or completed % max(1, len(configs) // 10) == 0:
-                    print(f"Progress: {completed}/{len(configs)} configurations processed ({completed/len(configs)*100:.1f}%)")
-                
-                try:
-                    _, success = future.result()
-                    results[config_hash] = success
-                except Exception as e:
-                    print(f"Exception during compilation of {config_hash}: {str(e)}")
-                    results[config_hash] = False
+                # Process results as they complete
+                for future in concurrent.futures.as_completed(future_to_config):
+                    config = future_to_config[future]
+                    config_hash = self._config_to_hash(config)
+                    
+                    try:
+                        _, success = future.result()
+                        results[config_hash] = success
+                    except concurrent.futures.process.BrokenProcessPool:
+                        print(f"Worker process crashed while compiling {config_hash}. Marking as failed.")
+                        results[config_hash] = False
+                    except Exception as e:
+                        print(f"Exception during compilation of {config_hash}: {str(e)}")
+                        results[config_hash] = False
+                    
+                    # Print progress
+                    completed = len(results)
+                    if self.verbose or completed % max(1, len(configs) // 10) == 0:
+                        print(f"Progress: {completed}/{len(configs)} configurations processed ({completed/len(configs)*100:.1f}%)")
         
         # Print summary
         total_time = time.time() - start_time
