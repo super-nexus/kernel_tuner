@@ -218,7 +218,7 @@ class ParallelTritonCompiler:
         print(f"First config to compile: {first_config} (hash: {first_config_hash})")
 
         # Process configurations in smaller batches to recover from worker failures
-        batch_size = 32  # Adjust based on your needs
+        batch_size = self.max_workers  # Adjust based on your needs
         for i in range(0, len(configs), batch_size):
             batch = configs[i:i+batch_size]
             print(f"Processing batch {i//batch_size + 1}/{(len(configs) + batch_size - 1)//batch_size}")
