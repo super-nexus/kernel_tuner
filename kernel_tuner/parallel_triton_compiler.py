@@ -450,5 +450,13 @@ def get_already_compiled_configs(
         verbose=True
     )
 
-    cached_configs, _ = compiler._scan_configs_parallel(tune_params)
+    searchspace = Searchspace(tune_params, restrictions, max_threads=4)
+    configs = []
+
+    param_names = list(tune_params.keys())
+    for config_tuple in searchspace.sorted_list():
+        config_dict = {param_names[i]: config_tuple[i] for i in range(len(param_names))}
+        configs.append(config_dict)
+
+    cached_configs, _ = compiler._scan_configs_parallel(configs)
     return cached_configs
