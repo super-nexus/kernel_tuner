@@ -5,10 +5,9 @@ that works directly with pre-compiled configurations.
 """
 
 import logging
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any
 from time import perf_counter
 
-from kernel_tuner.strategies.brute_force import brute_force
 from kernel_tuner.searchspace import Searchspace
 
 def triton_brute_force(
