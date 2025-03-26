@@ -30,11 +30,6 @@ def triton_brute_force(
     Returns:
         List of dictionaries containing the results of all configurations
     """
-    # Get the raw configurations from tuning_options
-    raw_configs = tuning_options.get('triton_raw_configs')
-    if not raw_configs:
-        raise ValueError("triton_raw_configs must be provided for triton_brute_force strategy")
-
     results = runner.run(raw_configs, tuning_options)
            
     return results 
