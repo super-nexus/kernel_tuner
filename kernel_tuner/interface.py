@@ -58,6 +58,7 @@ from kernel_tuner.strategies import (
     pso,
     random_sample,
     simulated_annealing,
+    triton_brute_force,
 )
 
 strategy_map = {
@@ -76,6 +77,7 @@ strategy_map = {
     "simulated_annealing": simulated_annealing,
     "firefly_algorithm": firefly_algorithm,
     "bayes_opt": bayes_opt,
+    "triton_brute_force": triton_brute_force,
 }
 
 
@@ -621,7 +623,7 @@ def tune_kernel(
     logging.debug("device_options: %s", util.get_config_string(device_options))
 
     if triton_raw_configs is not None:
-        strategy = brute_force
+        strategy = triton_brute_force
         if verbose:
             print(f"Using {len(triton_raw_configs)} pre-compiled Triton configurations")
     elif strategy:
@@ -662,7 +664,10 @@ def tune_kernel(
 
     # call the strategy to execute the tuning process
     tuning_options["start_time"] = perf_counter()
-    results = strategy.tune(searchspace, runner, tuning_options)
+    if strategy == triton_brute_force:
+        results = strategy.tune(searchspace, runner, tuning_options)
+    else:
+        results = strategy.tune(searchspace, runner, tuning_options)
     env = runner.get_environment(tuning_options)
 
     # finished iterating over search space

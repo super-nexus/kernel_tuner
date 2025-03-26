@@ -184,7 +184,9 @@ def tune_matmul(m):
         tune_params=tune_params,  # Use only successfully compiled configurations
         lang='TRITON',
         block_size_names=["BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K"],
-        triton_raw_configs=cached_configs
+        triton_raw_configs=cached_configs,
+        strategy='triton_brute_force',
+        strategy_options={'triton_raw_configs': cached_configs},
     )
 
     # Filter out failed configurations and format results
