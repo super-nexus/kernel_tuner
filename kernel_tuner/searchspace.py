@@ -108,6 +108,27 @@ class Searchspace:
         if build_neighbors_index:
             self.neighbors_index = self.__build_neighbors_index(neighbor_method)
 
+    @classmethod
+    def from_raw_configs(cls, configs):
+        """Create a searchspace from a list of raw configurations.
+        
+        Args:
+            configs: List of dictionaries containing parameter configurations
+            
+        Returns:
+            Searchspace object that will iterate through the provided configs
+        """
+        instance = cls.__new__(cls)
+        instance._raw_configs = configs
+        instance.size = len(configs)
+        
+        # Define minimal required methods
+        def sorted_list():
+            return instance._raw_configs
+        
+        instance.sorted_list = sorted_list
+        return instance
+
     # def __build_searchspace_ortools(self, block_size_names: list, max_threads: int) -> Tuple[List[tuple], np.ndarray, dict, int]:
     #     # Based on https://developers.google.com/optimization/cp/cp_solver#python_2
     #     from ortools.sat.python import cp_model

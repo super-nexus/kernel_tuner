@@ -10,7 +10,7 @@ import triton
 import triton.language as tl
 from triton.backends.compiler import GPUTarget
 
-from kernel_tuner.parallel_triton_compiler import parallel_compile_triton_kernel
+from kernel_tuner.parallel_triton_compiler import parallel_compile_triton_kernel, get_already_compiled_configs
 from kernel_tuner.interface import tune_kernel
 
 # Define a simple matrix multiplication kernel
@@ -170,7 +170,7 @@ def tune_matmul(m):
 
     # First compile all configurations in parallel
     print("Compiling configurations in parallel...")
-    compilation_results, successful_configs = parallel_compile_triton_kernel(
+    cached_configs = get_already_compiled_configs(
         kernel_name="matmul_kernel",
         kernel_fn=matmul_kernel,
         arguments=arguments,
@@ -179,12 +179,7 @@ def tune_matmul(m):
         verbose=True
     )
 
-    print(f"Found {len(successful_configs)} successfully compiled configurations")
-
-    # Convert successful configs to the format expected by tune_kernel
-    successful_tune_params = {}
-    for param in tune_params.keys():
-        successful_tune_params[param] = list(set(config[param] for config in successful_configs))
+    print(f"Found {len(cached_configs)} successfully compiled configurations")
     
     print("Starting tuning with successfully compiled configurations...")
     results, env = tune_kernel(
@@ -192,9 +187,10 @@ def tune_matmul(m):
         kernel_source=matmul_kernel,
         problem_size=problem_size,
         arguments=arguments,
-        tune_params=successful_tune_params,  # Use only successfully compiled configurations
+        tune_params=tune_params,  # Use only successfully compiled configurations
         lang='TRITON',
         block_size_names=["BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K"],
+        triton_raw_configs=cached_configs
     )
 
     # Filter out failed configurations and format results
@@ -212,4 +208,4 @@ def tune_matmul(m):
     return valid_results
 
 if __name__ == "__main__":
-    main(8192)
+    tune_matmul(8192)

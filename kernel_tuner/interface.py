@@ -578,6 +578,7 @@ def tune_kernel(
     observers=None,
     objective=None,
     objective_higher_is_better=None,
+    triton_raw_configs=None,
 ):
     start_overhead_time = perf_counter()
     if log:
@@ -591,7 +592,8 @@ def tune_kernel(
     objective, objective_higher_is_better = get_objective_defaults(objective, objective_higher_is_better)
 
     # check for forbidden names in tune parameters
-    util.check_tune_params_list(tune_params, observers, simulation_mode=simulation_mode)
+    if not triton_raw_configs:
+        util.check_tune_params_list(tune_params, observers, simulation_mode=simulation_mode)
 
     # check whether block_size_names are used as expected
     util.check_block_size_params_names_list(block_size_names, tune_params)
@@ -618,37 +620,15 @@ def tune_kernel(
     logging.debug("tuning_options: %s", util.get_config_string(tuning_options))
     logging.debug("device_options: %s", util.get_config_string(device_options))
 
-    if strategy:
+    if triton_raw_configs is not None:
+        strategy = brute_force
+        if verbose:
+            print(f"Using {len(triton_raw_configs)} pre-compiled Triton configurations")
+    elif strategy:
         if strategy in strategy_map:
             strategy = strategy_map[strategy]
         else:
-            raise ValueError(f"Unkown strategy {strategy}, must be one of: {', '.join(list(strategy_map.keys()))}")
-
-        # make strategy_options into an Options object
-        if tuning_options.strategy_options:
-            if not isinstance(strategy_options, Options):
-                tuning_options.strategy_options = Options(strategy_options)
-
-            # select strategy based on user options
-            if "fraction" in tuning_options.strategy_options and not tuning_options.strategy == "random_sample":
-                raise ValueError(
-                    'It is not possible to use fraction in combination with strategies other than "random_sample". '
-                    'Please set strategy="random_sample", when using "fraction" in strategy_options'
-                )
-
-            # check if method is supported by the selected strategy
-            if "method" in tuning_options.strategy_options:
-                method = tuning_options.strategy_options.method
-                if method not in strategy.supported_methods:
-                    raise ValueError("Method %s is not supported for strategy %s" % (method, tuning_options.strategy))
-
-        # if no strategy_options dict has been passed, create empty dictionary
-        else:
-            tuning_options.strategy_options = Options({})
-
-    # if no strategy selected
-    else:
-        strategy = brute_force
+            raise ValueError(f"Unknown strategy {strategy}, must be one of: {', '.join(list(strategy_map.keys()))}")
 
     # select the runner for this job based on input
     selected_runner = SimulationRunner if simulation_mode else SequentialRunner
@@ -669,12 +649,16 @@ def tune_kernel(
         tuning_options.cache = {}
         tuning_options.cachefile = None
 
-    # create search space
-    searchspace = Searchspace(tune_params, restrictions, runner.dev.max_threads)
-    restrictions = searchspace._modified_restrictions
-    tuning_options.restrictions = restrictions
-    if verbose:
-        print(f"Searchspace has {searchspace.size} configurations after restrictions.")
+    # create search space or use raw configs
+    if triton_raw_configs is not None:
+        searchspace = Searchspace.from_raw_configs(triton_raw_configs)
+        print(f"Using {len(triton_raw_configs)} pre-compiled configurations")
+    else:
+        searchspace = Searchspace(tune_params, restrictions, runner.dev.max_threads)
+        restrictions = searchspace._modified_restrictions
+        tuning_options.restrictions = restrictions
+        if verbose:
+            print(f"Searchspace has {searchspace.size} configurations after restrictions.")
 
     # call the strategy to execute the tuning process
     tuning_options["start_time"] = perf_counter()
