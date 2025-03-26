@@ -8,7 +8,7 @@ from kernel_tuner.runners.runner import Runner
 from kernel_tuner.util import ErrorConfig, print_config_output, process_metrics, store_cache
 
 
-class SequentialRunner(Runner):
+class TritonRunner(Runner):
     """SequentialRunner is used for tuning with a single process/thread."""
 
     def __init__(self, kernel_source, kernel_options, device_options, iterations, observers):
