@@ -70,13 +70,14 @@ class ParallelTritonCompiler:
             self.cache_dir = None
             
         self.compilation_results = {}
-        self.successful_configs = []  # Track successful configurations
+        self.cache_file = self._get_cache_file() if self.cache_dir else None
+        self.cache_data = self._load_cache() if self.cache_file else {}
         
-    def _get_cache_path(self, config_hash: str) -> Path:
-        """Get the path to the cache file for a given configuration hash."""
+    def _get_cache_file(self) -> Path:
+        """Get the path to the cache file for this kernel."""
         if self.cache_dir is None:
             return None
-        return self.cache_dir / f"{config_hash}.json"
+        return self.cache_dir / f"{self.kernel_name}_cache.json"
     
     def _config_to_hash(self, config: Dict[str, Any]) -> str:
         """Convert a configuration to a unique hash string."""
@@ -96,7 +97,30 @@ class ParallelTritonCompiler:
             
         return hashlib.md5(config_str.encode()).hexdigest()
     
-    def _compile_single_config(self, config: Union[Dict[str, Any], Tuple]) -> Tuple[Union[Dict[str, Any], Tuple], bool]:
+    def _load_cache(self) -> Dict:
+        """Load the cache file if it exists."""
+        if not self.cache_file or not self.cache_file.exists():
+            return {}
+        
+        try:
+            with open(self.cache_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to load cache file: {str(e)}")
+            return {}
+    
+    def _save_cache(self):
+        """Save the current cache data to file."""
+        if not self.cache_file:
+            return
+            
+        try:
+            with open(self.cache_file, 'w') as f:
+                json.dump(self.cache_data, f)
+        except Exception as e:
+            print(f"Warning: Failed to save cache file: {str(e)}")
+    
+    def _compile_single_config(self, config: Union[Dict[str, Any], Tuple]) -> Tuple[Union[Dict[str, Any], Tuple], bool, Dict]:
         """
         Compile a single kernel configuration.
         
@@ -104,15 +128,14 @@ class ParallelTritonCompiler:
             config: The kernel configuration to compile (dict or tuple)
             
         Returns:
-            Tuple of (config, success)
+            Tuple of (config, success, cache_data)
         """
         config_hash = self._config_to_hash(config)
-        cache_path = self._get_cache_path(config_hash)
 
         # Check if already in cache
-        if cache_path and cache_path.exists():
+        if config_hash in self.cache_data and self.cache_data[config_hash].get('success', False):
             print(f"Config {config_hash} found in cache")
-            return config, True
+            return config, True, None
         
         try:
             # Convert tuple to dict if needed for compilation
@@ -125,7 +148,7 @@ class ParallelTritonCompiler:
                 # We need param names to convert tuple to dict
                 # This is a limitation - we can't compile tuples directly
                 print(f"Warning: Tuple config received but can't be compiled directly. Skipping {config}")
-                return config, False
+                return config, False, None
             
             # Compile using warmup
             kernel_jit = triton.jit(updated_fn)
@@ -134,17 +157,12 @@ class ParallelTritonCompiler:
             kernel_jit.warmup(grid=(1, 1, 1), *self.arguments, **constants)
             compile_time = time.time() - start_time
 
-            # Cache the result if caching is enabled
-            if cache_path:
-                with open(cache_path, 'w') as f:
-                    json.dump({
-                        'config': str(config) if isinstance(config, tuple) else config,
-                        'compile_time': compile_time,
-                        'success': True
-                    }, f)
-            
-            # Add to successful configs if compilation succeeded
-            self.successful_configs.append(config)
+            # Prepare cache data to be saved in main process
+            cache_data = {
+                'config': str(config) if isinstance(config, tuple) else config,
+                'compile_time': compile_time,
+                'success': True
+            }
             
             print(f"Successfully compiled config {config_hash} in {compile_time:.2f}s")
             # Delete the temporary file
@@ -154,22 +172,20 @@ class ParallelTritonCompiler:
                 except Exception as e:
                     print(f"Warning: Failed to delete temporary file {tmp_file_path}: {str(e)}")
 
-            return config, True
+            return config, True, cache_data
         except Exception as e:
             print(f"Failed to compile config {config_hash}: {str(e)}")
             
-            # Cache the failure if caching is enabled
-            if cache_path:
-                with open(cache_path, 'w') as f:
-                    json.dump({
-                        'config': str(config) if isinstance(config, tuple) else config,
-                        'error': str(e),
-                        'success': False
-                    }, f)
+            # Prepare cache data for failure
+            cache_data = {
+                'config': str(config) if isinstance(config, tuple) else config,
+                'error': str(e),
+                'success': False
+            }
             
-            return config, False
+            return config, False, cache_data
     
-    def _compile_single_config_wrapper(self, config: Union[Dict[str, Any], Tuple]) -> Tuple[Union[Dict[str, Any], Tuple], bool]:
+    def _compile_single_config_wrapper(self, config: Union[Dict[str, Any], Tuple]) -> Tuple[Union[Dict[str, Any], Tuple], bool, Dict]:
         """
         Wrapper function to catch any unexpected exceptions during compilation.
         
@@ -177,48 +193,28 @@ class ParallelTritonCompiler:
             config: The kernel configuration to compile
             
         Returns:
-            Tuple of (config, success)
+            Tuple of (config, success, cache_data)
         """
         try:
             return self._compile_single_config(config)
         except Exception as e:
             config_hash = self._config_to_hash(config)
-            cache_path = self._get_cache_path(config_hash)
             
-            # Log and cache the failure
+            # Log the failure
             print(f"Caught unexpected exception while compiling {config_hash}: {type(e).__name__}: {str(e)}")
             
-            if cache_path:
-                try:
-                    with open(cache_path, 'w') as f:
-                        json.dump({
-                            'config': str(config) if isinstance(config, tuple) else config,
-                            'error': f"{type(e).__name__}: {str(e)}",
-                            'success': False
-                        }, f)
-                except:
-                    print(f"Failed to write to cache file for {config_hash}")
+            # Prepare cache data for failure
+            cache_data = {
+                'config': str(config) if isinstance(config, tuple) else config,
+                'error': f"{type(e).__name__}: {str(e)}",
+                'success': False
+            }
             
-            return config, False
+            return config, False, cache_data
     
-    def _check_cache_file(self, config: Union[Dict[str, Any], Tuple]) -> bool:
-        """Check if a single configuration exists in cache and was successful."""
-        config_hash = self._config_to_hash(config)
-        cache_path = self._get_cache_path(config_hash)
-        
-        if not cache_path or not cache_path.exists():
-            return False
-        
-        try:
-            with open(cache_path, 'r') as f:
-                data = json.load(f)
-                return data.get('success', False)
-        except Exception:
-            return False
-
-    def _scan_configs_parallel(self, configs: List[Union[Dict[str, Any], Tuple]]) -> Tuple[List, List]:
+    def _scan_configs(self, configs: List[Union[Dict[str, Any], Tuple]]) -> Tuple[List, List]:
         """
-        Scan configurations in parallel to determine which ones are cached.
+        Scan configurations to determine which ones are cached.
         
         Args:
             configs: List of configurations to check
@@ -232,33 +228,18 @@ class ParallelTritonCompiler:
         print("Scanning cache for existing configurations...")
         start_time = time.time()
         
-        # Create a process pool for parallel scanning
-        mp_context = mp.get_context('spawn')
-        with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers, mp_context=mp_context) as executor:
-            # Submit all cache checking tasks
-            future_to_config = {
-                executor.submit(self._check_cache_file, config): config 
-                for config in configs
-            }
-            
-            # Process results as they complete
-            for future in concurrent.futures.as_completed(future_to_config):
-                config = future_to_config[future]
-                try:
-                    is_cached = future.result()
-                    if is_cached:
-                        cached_configs.append(config)
-                    else:
-                        uncached_configs.append(config)
-                except Exception as e:
-                    print(f"Error checking cache for config: {str(e)}")
-                    uncached_configs.append(config)
-                    
-                # Print progress periodically
-                total_processed = len(cached_configs) + len(uncached_configs)
-                if self.verbose or total_processed % max(1, len(configs) // 10) == 0:
-                    print(f"Cache scan progress: {total_processed}/{len(configs)} "
-                          f"({total_processed/len(configs)*100:.1f}%)")
+        for config in configs:
+            config_hash = self._config_to_hash(config)
+            if config_hash in self.cache_data:
+                cached_configs.append(config)
+            else:
+                uncached_configs.append(config)
+                
+            # Print progress periodically
+            total_processed = len(cached_configs) + len(uncached_configs)
+            if self.verbose or total_processed % max(1, len(configs) // 10) == 0:
+                print(f"Cache scan progress: {total_processed}/{len(configs)} "
+                      f"({total_processed/len(configs)*100:.1f}%)")
         
         scan_time = time.time() - start_time
         print(f"Cache scan complete in {scan_time:.2f}s:")
@@ -279,16 +260,14 @@ class ParallelTritonCompiler:
         """
         results = {}
         start_time = time.time()
-        self.successful_configs = []
         
         # First scan cache for existing configurations in parallel
-        cached_configs, configs_to_compile = self._scan_configs_parallel(configs)
+        cached_configs, configs_to_compile = self._scan_configs(configs)
         
         # Add cached configs to results
         for config in cached_configs:
             config_hash = self._config_to_hash(config)
             results[config_hash] = True
-            self.successful_configs.append(config)
         
         if not configs_to_compile:
             print("All configurations already cached!")
@@ -318,10 +297,11 @@ class ParallelTritonCompiler:
                     config_hash = self._config_to_hash(config)
                     
                     try:
-                        _, success = future.result()
+                        _, success, cache_data = future.result()
                         results[config_hash] = success
-                        if success:
-                            self.successful_configs.append(config)
+                        # Store cache data to be saved after batch
+                        if cache_data:
+                            self.cache_data[config_hash] = cache_data
                     except concurrent.futures.process.BrokenProcessPool:
                         print(f"Worker process crashed while compiling {config_hash}. Marking as failed.")
                         results[config_hash] = False
@@ -333,6 +313,9 @@ class ParallelTritonCompiler:
                     completed = len(results)
                     if self.verbose or completed % max(1, len(configs) // 10) == 0:
                         print(f"Progress: {completed}/{len(configs)} configurations processed ({completed/len(configs)*100:.1f}%)")
+            
+            # Save cache after each batch is complete
+            self._save_cache()
         
         # Print summary
         total_time = time.time() - start_time
@@ -341,16 +324,6 @@ class ParallelTritonCompiler:
         print(f"Compilation complete: {successful}/{len(configs)} successful in {total_time:.2f}s")
         print(f"Average time per configuration: {total_time/len(configs):.2f}s")
         print(f"Effective configurations per second: {len(configs)/total_time:.2f}")
-        
-        # Save successful configurations to cache if enabled
-        if self.cache_dir:
-            successful_configs_path = self.cache_dir / "successful_configs.json"
-            with open(successful_configs_path, 'w') as f:
-                json.dump({
-                    'kernel_name': self.kernel_name,
-                    'successful_configs': self.successful_configs,
-                    'timestamp': time.time()
-                }, f)
         
         return results
     
@@ -386,7 +359,7 @@ class ParallelTritonCompiler:
         Returns:
             List of successfully compiled configurations
         """
-        return self.successful_configs
+        return [config['config'] for config in self.cache_data.values() if config.get('success', False)]
 
 def parallel_compile_triton_kernel(
     kernel_name: str,
@@ -431,14 +404,20 @@ def parallel_compile_triton_kernel(
 
 def get_already_compiled_configs(
     cache_dir: str,
+    kernel_name: str,
 ) -> List[Union[Dict[str, Any], Tuple]]:
     """
     Get the list of already compiled configurations from the cache directory.
     """
-    cached_configs = []
-    successful_configs_path = Path(cache_dir) / "successful_configs.json"
-    if successful_configs_path.exists():
-        with open(successful_configs_path, 'r') as f:
-            data = json.load(f)
-
-    return data['successful_configs']
+    cache_file = Path(cache_dir) / f"{kernel_name}_cache.json"
+    if not cache_file.exists():
+        return []
+        
+    try:
+        with open(cache_file, 'r') as f:
+            cache_data = json.load(f)
+            # Return only successful configurations
+            return [config['config'] for config in cache_data.values() if config.get('success', False)]
+    except Exception as e:
+        print(f"Warning: Failed to load cache file: {str(e)}")
+        return []
