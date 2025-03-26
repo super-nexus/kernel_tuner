@@ -441,4 +441,4 @@ def get_already_compiled_configs(
         with open(successful_configs_path, 'r') as f:
             data = json.load(f)
 
-    return data
+    return data['successful_configs']
