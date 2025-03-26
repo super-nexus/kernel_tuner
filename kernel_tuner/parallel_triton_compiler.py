@@ -430,33 +430,15 @@ def parallel_compile_triton_kernel(
     return results, compiler.get_successful_configs() 
 
 def get_already_compiled_configs(
-        kernel_name: str,
-        cache_dir: str,
-        kernel_fn: Callable,
-        arguments: List[any],
-        tune_params: Dict[str, List],
-        restrictions: Optional[Union[Callable, List[str]]] = None
+    cache_dir: str,
 ) -> List[Union[Dict[str, Any], Tuple]]:
     """
     Get the list of already compiled configurations from the cache directory.
     """
+    cached_configs = []
+    successful_configs_path = Path(cache_dir) / "successful_configs.json"
+    if successful_configs_path.exists():
+        with open(successful_configs_path, 'r') as f:
+            data = json.load(f)
 
-    compiler = ParallelTritonCompiler(
-        kernel_name=kernel_name,
-        kernel_fn=kernel_fn,
-        arguments=arguments,
-        max_workers=None,
-        cache_dir=cache_dir,
-        verbose=True
-    )
-
-    searchspace = Searchspace(tune_params, restrictions, max_threads=4)
-    configs = []
-
-    param_names = list(tune_params.keys())
-    for config_tuple in searchspace.sorted_list():
-        config_dict = {param_names[i]: config_tuple[i] for i in range(len(param_names))}
-        configs.append(config_dict)
-
-    cached_configs, _ = compiler._scan_configs_parallel(configs)
-    return cached_configs
+    return data
