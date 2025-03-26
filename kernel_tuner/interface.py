@@ -665,7 +665,7 @@ def tune_kernel(
     # call the strategy to execute the tuning process
     tuning_options["start_time"] = perf_counter()
     if strategy == triton_brute_force:
-        results = strategy.tune(searchspace, runner, tuning_options)
+        results = strategy.triton_brute_force(triton_raw_configs, runner, tuning_options)
     else:
         results = strategy.tune(searchspace, runner, tuning_options)
     env = runner.get_environment(tuning_options)

@@ -10,8 +10,8 @@ from time import perf_counter
 
 from kernel_tuner.searchspace import Searchspace
 
-def tune(
-    searchspace: Searchspace,
+def triton_brute_force(
+    raw_configs: List[Dict[str, Any]],
     runner,
     tuning_options: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
