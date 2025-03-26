@@ -169,15 +169,10 @@ def tune_matmul(m):
     tune_params['GROUP_SIZE_M'] = [i for i in range(4, 10)]
 
     # First compile all configurations in parallel
-    print("Compiling configurations in parallel...")
+    print("Getting already compiled configurations...")
     cached_configs = get_already_compiled_configs(
-        kernel_name="matmul_kernel",
-        kernel_fn=matmul_kernel,
-        arguments=arguments,
-        tune_params=tune_params,
         cache_dir="triton_cache",
     )
-
     print(f"Found {len(cached_configs)} successfully compiled configurations")
     
     print("Starting tuning with successfully compiled configurations...")
