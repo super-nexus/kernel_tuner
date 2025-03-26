@@ -70,6 +70,7 @@ class ParallelTritonCompiler:
             self.cache_dir = None
             
         self.compilation_results = {}
+        self.successful_configs = []  # Track successful configurations
         
     def _get_cache_path(self, config_hash: str) -> Path:
         """Get the path to the cache file for a given configuration hash."""
@@ -142,6 +143,8 @@ class ParallelTritonCompiler:
                         'success': True
                     }, f)
             
+            # Add to successful configs if compilation succeeded
+            self.successful_configs.append(config)
             
             print(f"Successfully compiled config {config_hash} in {compile_time:.2f}s")
             # Delete the temporary file
@@ -210,6 +213,7 @@ class ParallelTritonCompiler:
         """
         results = {}
         start_time = time.time()
+        self.successful_configs = []  # Reset successful configs list
         
         print(f"Compiling {len(configs)} configurations using {self.max_workers} workers...")
         # Print the first config for debug
@@ -260,6 +264,16 @@ class ParallelTritonCompiler:
         print(f"Average time per configuration: {total_time/len(configs):.2f}s")
         print(f"Effective configurations per second: {len(configs)/total_time:.2f}")
         
+        # Save successful configurations to cache if enabled
+        if self.cache_dir:
+            successful_configs_path = self.cache_dir / "successful_configs.json"
+            with open(successful_configs_path, 'w') as f:
+                json.dump({
+                    'kernel_name': self.kernel_name,
+                    'successful_configs': self.successful_configs,
+                    'timestamp': time.time()
+                }, f)
+        
         return results
     
     def compile_searchspace(self, tune_params: Dict[str, List], restrictions: Optional[Union[Callable, List[str]]] = None) -> Dict[str, bool]:
@@ -287,6 +301,14 @@ class ParallelTritonCompiler:
         
         return self.compile_configs(configs)
 
+    def get_successful_configs(self) -> List[Union[Dict[str, Any], Tuple]]:
+        """
+        Get the list of successfully compiled configurations.
+        
+        Returns:
+            List of successfully compiled configurations
+        """
+        return self.successful_configs
 
 def parallel_compile_triton_kernel(
     kernel_name: str,
@@ -297,7 +319,7 @@ def parallel_compile_triton_kernel(
     max_workers: int = None,
     cache_dir: str = None,
     verbose: bool = False
-) -> Dict[str, bool]:
+) -> Tuple[Dict[str, bool], List[Union[Dict[str, Any], Tuple]]]:
     """
     Compile all valid configurations of a Triton kernel in parallel.
     
@@ -314,25 +336,8 @@ def parallel_compile_triton_kernel(
         verbose: Whether to print verbose output
         
     Returns:
-        Dictionary mapping configuration hashes to compilation success
-        
-    Example:
-        ```python
-        @triton.jit
-        def my_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-            # Kernel code here
-            pass
-            
-        signature = {0: "*fp32", 1: "*fp32", 2: "i32"}
-        tune_params = {"BLOCK_SIZE": [32, 64, 128, 256], "num_warps": [1, 2, 4, 8]}
-        
-        results = parallel_compile_triton_kernel(
-            kernel_fn=my_kernel,
-            tune_params=tune_params,
-            signature=signature,
-            cache_dir="triton_cache"
-        )
-        ```
+        Tuple of (dictionary mapping configuration hashes to compilation success,
+                 list of successfully compiled configurations)
     """
     compiler = ParallelTritonCompiler(
         kernel_name=kernel_name,
@@ -343,4 +348,5 @@ def parallel_compile_triton_kernel(
         verbose=verbose
     )
     
-    return compiler.compile_searchspace(tune_params, restrictions) 
+    results = compiler.compile_searchspace(tune_params, restrictions)
+    return results, compiler.get_successful_configs() 

@@ -168,15 +168,34 @@ def tune_matmul(m):
     tune_params['num_warps'] = [2, 4, 8]
     tune_params['GROUP_SIZE_M'] = [i for i in range(4, 10)]
 
+    # First compile all configurations in parallel
+    print("Compiling configurations in parallel...")
+    compilation_results, successful_configs = parallel_compile_triton_kernel(
+        kernel_name="matmul_kernel",
+        kernel_fn=matmul_kernel,
+        arguments=arguments,
+        tune_params=tune_params,
+        cache_dir="triton_cache",
+        verbose=True
+    )
+
+    print(f"Found {len(successful_configs)} successfully compiled configurations")
+
+    # Convert successful configs to the format expected by tune_kernel
+    successful_tune_params = {}
+    for param in tune_params.keys():
+        successful_tune_params[param] = list(set(config[param] for config in successful_configs))
+    
+    print("Starting tuning with successfully compiled configurations...")
     results, env = tune_kernel(
         kernel_name='matmul_kernel',
         kernel_source=matmul_kernel,
         problem_size=problem_size,
         arguments=arguments,
-        tune_params=tune_params,
+        tune_params=successful_tune_params,  # Use only successfully compiled configurations
         lang='TRITON',
         block_size_names=["BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K"],
-   )
+    )
 
     # Filter out failed configurations and format results
     valid_results = []
