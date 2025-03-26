@@ -35,6 +35,7 @@ from kernel_tuner.integration import get_objective_defaults
 from kernel_tuner.kernel_sources.kernel_source_factory import get_kernel_source
 from kernel_tuner.runners.sequential import SequentialRunner
 from kernel_tuner.runners.simulation import SimulationRunner
+from kernel_tuner.runners.triton import TritonRunner
 from kernel_tuner.searchspace import Searchspace
 
 try:
@@ -634,6 +635,7 @@ def tune_kernel(
 
     # select the runner for this job based on input
     selected_runner = SimulationRunner if simulation_mode else SequentialRunner
+    selected_runner = TritonRunner if triton_raw_configs is not None else selected_runner
     tuning_options.simulated_time = 0
     runner = selected_runner(kernelsource, kernel_options, device_options, iterations, observers)
 
