@@ -176,7 +176,6 @@ def tune_matmul(m):
         arguments=arguments,
         tune_params=tune_params,
         cache_dir="triton_cache",
-        verbose=True
     )
 
     print(f"Found {len(cached_configs)} successfully compiled configurations")
