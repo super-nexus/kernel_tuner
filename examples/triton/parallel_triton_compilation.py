@@ -172,6 +172,7 @@ def tune_matmul(m):
     print("Getting already compiled configurations...")
     cached_configs = get_already_compiled_configs(
         cache_dir="triton_cache",
+        kernel_name="matmul_kernel"
     )
     print(f"Found {len(cached_configs)} successfully compiled configurations")
     
@@ -204,4 +205,4 @@ def tune_matmul(m):
     return valid_results
 
 if __name__ == "__main__":
-    tune_matmul(8192)
+    main(8192)
