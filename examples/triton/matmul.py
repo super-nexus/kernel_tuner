@@ -135,6 +135,10 @@ def tune_matmul(m):
 
     cache_file_name = f'{cache_file}_{m}.json'
 
+    restrictions = [
+        "BLOCK_SIZE_X + BLOCK_SIZE_Y + BLOCK_SIZE_Z < 768",
+    ]
+
     print(f"Cache file name: {cache_file_name}")
 
     results, env = tune_kernel(
@@ -147,6 +151,7 @@ def tune_matmul(m):
         block_size_names=["BLOCK_SIZE_X", "BLOCK_SIZE_Y", "BLOCK_SIZE_Z"],
         cache=cache_file_name,
         strategy='genetic_algorithm',
+        restrictions=restrictions,
    )
 
     # Filter out failed configurations and format results
