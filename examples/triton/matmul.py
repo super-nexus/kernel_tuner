@@ -138,6 +138,8 @@ def tune_matmul(m):
 
     cache_file_name = f'{cache_file}_{m}.json'
 
+    print(f"Cache file name: {cache_file_name}")
+
     results, env = tune_kernel(
         kernel_name='matmul_kernel',
         kernel_source=matmul_kernel,
