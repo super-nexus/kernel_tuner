@@ -202,4 +202,4 @@ def tune_matmul(m):
     return valid_results
 
 if __name__ == "__main__":
-    main(8192)
+    main(16384)
