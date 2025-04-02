@@ -136,7 +136,10 @@ def tune_matmul(m):
     cache_file_name = f'{cache_file}_{m}.json'
 
     restrictions = [
-        "BLOCK_SIZE_X + BLOCK_SIZE_Y + BLOCK_SIZE_Z < 768",
+        "BLOCK_SIZE_X + BLOCK_SIZE_Y + BLOCK_SIZE_Z < 640",
+        "BLOCK_SIZE_X + BLOCK_SIZE_Y + BLOCK_SIZE_Z < 500 || num_stages <= 2",
+        "BLOCK_SIZE_X + BLOCK_SIZE_Y + BLOCK_SIZE_Z < 400 || num_stages <= 3",
+        "BLOCK_SIZE_X + BLOCK_SIZE_Y + BLOCK_SIZE_Z < 300 || num_stages <= 4",
     ]
 
     print(f"Cache file name: {cache_file_name}")
