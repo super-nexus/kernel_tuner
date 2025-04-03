@@ -179,7 +179,7 @@ def tune_matmul(m):
 
 
 if __name__ == '__main__':
-    mat_sizes = [8192]
+    mat_sizes = [4096]
     all_results = {}
     
     # Get GPU information
