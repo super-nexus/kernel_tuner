@@ -253,13 +253,34 @@ def tune_attention(batch_size=20, seq_len=1024, head_dim=64, num_heads=32):
     grid_div_y = ["1"]
     grid_div_z = ["1"]
 
+    def restrictions(config):
+        if config["BLOCK_N"] > config["HEAD_DIM"]:
+            return False
+
+        block_size_sum = config["BLOCK_M"] + config["BLOCK_N"]
+        num_stages = config["num_stages"]
+
+        if block_size_sum > 64 and num_stages >= 4:
+            return False
+        
+        if block_size_sum > 128 and num_stages >= 3:
+            return False
+        
+        if block_size_sum > 256 and num_stages >= 2:
+            return False
+        
+        if block_size_sum > 512 and num_stages >= 1:
+            return False
+
+        return True
+
     results, env = tune_kernel(
         kernel_name='attention_kernel',
         kernel_source=attention_kernel,
         problem_size=problem_size,
         arguments=arguments,
         tune_params=tune_params,
-        restrictions=constraints,
+        restrictions=restrictions,
         lang='TRITON',
         grid_div_x=grid_div_x,
         grid_div_y=grid_div_y,
