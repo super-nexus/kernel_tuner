@@ -286,11 +286,11 @@ def tune_attention(batch_size=20, seq_len=1024, head_dim=64, num_heads=32):
         grid_div_y=grid_div_y,
         grid_div_z=grid_div_z,
         block_size_names=['BLOCK_M', 'BLOCK_N'],
-        strategy='genetic_algorithm',
-        strategy_options={
-            'maxiter': 10000
-        },
-        cache=cache_file,
+        # strategy='genetic_algorithm',
+        # strategy_options={
+        #     'maxiter': 10000
+        # },
+        # cache=cache_file,
     )
 
     return results
